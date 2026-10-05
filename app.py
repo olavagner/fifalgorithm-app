@@ -1,4 +1,4 @@
-# app.py — E-Soccer Fifa Analytics v6.5.8 (Dark Neon + HT/FT Radar + avg_pct fix)
+# app.py — E-Soccer Fifa Analytics v6.5.8 (Dark Neon + HT/FT Radar + Login 2 colunas)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -27,7 +27,7 @@ if not hasattr(st, 'fragment'):
         return deco
     st.fragment = _fake_fragment
 
-st.set_page_config(page_title="E-Soccer Fifa Analytics | FIFAlgorithm", page_icon="💀",
+st.set_page_config(page_title="E-Soccer Fifa Analytics | FIFAlgorithm", page_icon="🎮",
                    layout="wide", initial_sidebar_state="expanded")
 
 if 'modo_claro' not in st.session_state: st.session_state.modo_claro = False
@@ -36,6 +36,9 @@ if 'notif_alerta' not in st.session_state: st.session_state.notif_alerta = True
 if 'ultima_oportunidade' not in st.session_state: st.session_state.ultima_oportunidade = set()
 if 'page' not in st.session_state: st.session_state.page = 'jogos_dia'
 if '_fetch_errors' not in st.session_state: st.session_state['_fetch_errors'] = []
+# ── LOGIN ──
+if 'autenticado' not in st.session_state: st.session_state.autenticado = False
+if 'usuario_logado' not in st.session_state: st.session_state.usuario_logado = ''
 
 N_SIMULATIONS = 5000
 H2H_RECENCY = 0.85
@@ -754,6 +757,367 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 </style>"""
 
 st.markdown(get_css(st.session_state.modo_claro), unsafe_allow_html=True)
+
+
+# ============================================
+# LOGIN — Autenticação com chave universal
+# ============================================
+# Fallback local (só usado se rodar sem secrets.toml)
+USERS = {
+    "vagner": "esoccer2025",
+}
+
+# ── Imagem da tela de login ──
+# Pode ser URL (https://...) ou caminho local (ex: "assets/login_player.jpg")
+LOGIN_IMAGE = "https://s2-cbn.glbimg.com/QCS2_v6drT3WBe0Q5DpV1Y-GWSo=/0x0:1080x1350/888x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_d975fad146a14bbfad9e763717b09688/internal_photos/bs/2026/B/O/WhSomnRsqSMLQV6czXRQ/snapinsta.to-750686613-18194490682373884-7089288799671511122-n.jpg"
+
+
+def check_credentials(user, pwd):
+    """Chave universal via st.secrets. Fallback pra USERS local."""
+    # 1) Master key universal
+    try:
+        master = st.secrets.get("access", {}).get("master_key", "")
+        if master and pwd == master:
+            return True
+    except Exception:
+        pass
+    # 2) Usuários individuais
+    try:
+        users = dict(st.secrets.get("users", {}))
+        if users.get(user.strip().lower()) == pwd:
+            return True
+    except Exception:
+        pass
+    # 3) Fallback local
+    return USERS.get(user.strip().lower()) == pwd
+
+
+def _img_src(path_or_url):
+    """Aceita URL, data URL ou caminho local (base64)."""
+    if not path_or_url:
+        return ''
+    if path_or_url.startswith(('http://', 'https://', 'data:')):
+        return path_or_url
+    try:
+        with open(path_or_url, 'rb') as f:
+            data = base64.b64encode(f.read()).decode()
+        ext = path_or_url.rsplit('.', 1)[-1].lower()
+        mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
+        return f'data:{mime};base64,{data}'
+    except Exception:
+        return ''
+
+
+def get_login_css():
+    return """<style>
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="stHeader"]   { display: none !important; }
+    .main .block-container {
+        padding-top: 1rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+        max-width: 1400px !important;
+    }
+    .stApp {
+        background:
+            radial-gradient(circle at 20% 40%, rgba(0,245,255,0.05), transparent 45%),
+            radial-gradient(circle at 80% 20%, rgba(181,55,255,0.05), transparent 45%),
+            #05070f !important;
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 18px;
+    }
+    .login-logo {
+        font-size: 78px;
+        line-height: 1;
+        margin-bottom: 6px;
+        filter: drop-shadow(0 0 28px rgba(0,245,255,0.75))
+                drop-shadow(0 0 55px rgba(181,55,255,0.45));
+        animation: logoPulse 4s ease-in-out infinite;
+    }
+    @keyframes logoPulse {
+        0%,100% { filter: drop-shadow(0 0 28px rgba(0,245,255,0.75))
+                          drop-shadow(0 0 55px rgba(181,55,255,0.45)); }
+        50%     { filter: drop-shadow(0 0 42px rgba(0,245,255,0.95))
+                          drop-shadow(0 0 75px rgba(181,55,255,0.65)); }
+    }
+    .login-brand-title {
+        line-height: 1.05;
+        font-weight: 900;
+        letter-spacing: -1.5px;
+    }
+    .login-brand-title .lt-white {
+        font-size: 36px;
+        color: #f0f5ff;
+        text-shadow: 0 0 22px rgba(0,245,255,0.35);
+    }
+    .login-brand-title .lt-grad {
+        font-size: 36px;
+        background: linear-gradient(135deg, #00ff88 0%, #00f5ff 50%, #b537ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        filter: drop-shadow(0 0 18px rgba(0,245,255,0.5));
+    }
+
+    .login-card {
+        background: rgba(10, 15, 28, 0.92);
+        border: 1px solid rgba(0,245,255,0.28);
+        border-radius: 16px;
+        padding: 26px 26px 22px 26px;
+        box-shadow:
+            0 0 50px rgba(0,245,255,0.15),
+            0 0 100px rgba(181,55,255,0.08),
+            inset 0 1px 0 rgba(0,245,255,0.3),
+            inset 0 0 40px rgba(0,245,255,0.03);
+        backdrop-filter: blur(8px);
+    }
+    .login-welcome {
+        font-size: 22px;
+        font-weight: 900;
+        color: #f0f5ff;
+        text-align: center;
+        margin-bottom: 4px;
+    }
+    .login-welcome .grn {
+        color: #00ff88;
+        text-shadow: 0 0 14px rgba(0,255,136,0.6);
+    }
+    .login-welcome-sub {
+        font-size: 12.5px;
+        color: #7a89a8;
+        text-align: center;
+        margin-bottom: 20px;
+        line-height: 1.5;
+    }
+
+    .stTextInput input {
+        background: rgba(18,24,42,0.95) !important;
+        border: 1px solid rgba(0,245,255,0.22) !important;
+        border-radius: 10px !important;
+        color: #f0f5ff !important;
+        padding: 12px 14px 12px 46px !important;
+        font-size: 14px !important;
+        height: 50px !important;
+        transition: all 0.2s;
+    }
+    .stTextInput input:focus {
+        border-color: #00f5ff !important;
+        box-shadow: 0 0 22px rgba(0,245,255,0.35) !important;
+    }
+    .stTextInput input::placeholder { color: #55617d !important; }
+
+    .st-key-login_user [data-baseweb="input"] { position: relative; }
+    .st-key-login_user [data-baseweb="input"]::before {
+        content: ""; position: absolute; left: 14px; top: 50%;
+        transform: translateY(-50%);
+        width: 20px; height: 20px; opacity: 0.55;
+        background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f5ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>") no-repeat center;
+        z-index: 2; pointer-events: none;
+    }
+    .st-key-login_pwd [data-baseweb="input"] { position: relative; }
+    .st-key-login_pwd [data-baseweb="input"]::before {
+        content: ""; position: absolute; left: 14px; top: 50%;
+        transform: translateY(-50%);
+        width: 20px; height: 20px; opacity: 0.55;
+        background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f5ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>") no-repeat center;
+        z-index: 2; pointer-events: none;
+    }
+
+    .stCheckbox label span {
+        color: #f0f5ff !important;
+        font-size: 12.5px !important;
+        font-weight: 600 !important;
+    }
+    .forgot-link {
+        text-align: right;
+        font-size: 12px;
+        color: #00ff88 !important;
+        font-weight: 700;
+        padding-top: 10px;
+        text-decoration: none;
+        display: block;
+        transition: all 0.15s;
+    }
+    .forgot-link:hover { color: #00f5ff !important; text-shadow: 0 0 10px rgba(0,245,255,0.6); }
+
+    .stFormSubmitButton button {
+        background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%) !important;
+        color: #05070f !important;
+        border: none !important;
+        font-weight: 900 !important;
+        font-size: 14.5px !important;
+        letter-spacing: 2px !important;
+        border-radius: 10px !important;
+        height: 50px !important;
+        margin-top: 4px;
+        box-shadow: 0 0 32px rgba(0,255,136,0.45),
+                    0 0 65px rgba(0,255,136,0.18) !important;
+        text-transform: uppercase;
+        transition: all 0.2s !important;
+    }
+    .stFormSubmitButton button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 0 45px rgba(0,255,136,0.7),
+                    0 0 90px rgba(0,255,136,0.3) !important;
+    }
+
+    .login-bottom-sep {
+        display: flex; align-items: center; gap: 12px;
+        margin: 22px 0 18px 0;
+    }
+    .login-bottom-sep .line {
+        flex: 1; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(0,245,255,0.35), transparent);
+    }
+    .login-bottom-sep .text {
+        font-size: 11px; color: #7a89a8;
+        text-transform: uppercase; letter-spacing: 1.5px;
+        font-weight: 800; white-space: nowrap;
+    }
+    .login-brand-footer {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0 6px;
+    }
+    .login-brand-footer .bf-left { display: flex; align-items: center; gap: 10px; }
+    .login-brand-footer .ic {
+        font-size: 22px;
+        filter: drop-shadow(0 0 10px rgba(0,245,255,0.7));
+    }
+    .login-brand-footer .bname {
+        font-size: 13px; font-weight: 900; line-height: 1.1;
+        color: #f0f5ff;
+    }
+    .login-brand-footer .bname .grad {
+        background: linear-gradient(135deg, #00f5ff, #b537ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .login-brand-footer .bf-right {
+        text-align: right;
+        font-size: 9.5px; letter-spacing: 1.5px;
+        font-weight: 800; color: #55617d;
+        text-transform: uppercase; line-height: 1.4;
+    }
+    .login-brand-footer .bf-right b { color: #00f5ff; }
+
+    .login-right-img {
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(0,245,255,0.2);
+        box-shadow:
+            0 0 50px rgba(0,245,255,0.15),
+            0 0 100px rgba(181,55,255,0.1);
+        height: 100%;
+        min-height: 620px;
+        position: relative;
+    }
+    .login-right-img img {
+        width: 100%;
+        height: 100%;
+        min-height: 620px;
+        object-fit: cover;
+        object-position: center top;
+        display: block;
+    }
+    .login-right-img::after {
+        content: '';
+        position: absolute; inset: 0;
+        background: linear-gradient(90deg, rgba(5,7,15,0.55) 0%, transparent 35%, transparent 100%);
+        pointer-events: none;
+    }
+    </style>"""
+
+
+def render_login():
+    st.markdown(get_login_css(), unsafe_allow_html=True)
+
+    _, wrapper, _ = st.columns([0.4, 12, 0.4])
+    with wrapper:
+        col_left, col_right = st.columns([1, 1], gap="large")
+
+        # ── COLUNA ESQUERDA: logo + card ──
+        with col_left:
+            st.markdown("""
+            <div class="login-header">
+                <div class="login-logo">💀</div>
+                <div class="login-brand-title">
+                    <div class="lt-white">E-Soccer</div>
+                    <div class="lt-grad">Fifa Analytics</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown('<div class="login-card">', unsafe_allow_html=True)
+            st.markdown("""
+                <div class="login-welcome">Bem-vindo de <span class="grn">volta!</span></div>
+                <div class="login-welcome-sub">Acesse sua conta e continue analisando os melhores jogos.</div>
+            """, unsafe_allow_html=True)
+
+            with st.form("login_form", clear_on_submit=False):
+                with st.container(key="login_user"):
+                    user = st.text_input("Usuário", placeholder="Usuário",
+                                         label_visibility="collapsed",
+                                         key="login_user_input")
+                with st.container(key="login_pwd"):
+                    pwd = st.text_input("Senha", type="password", placeholder="Senha",
+                                        label_visibility="collapsed",
+                                        key="login_pwd_input")
+
+                c1, c2 = st.columns([1, 1])
+                with c1:
+                    st.checkbox("Lembrar-me", value=True, key="login_remember")
+                with c2:
+                    st.markdown('<a href="#" class="forgot-link">Esqueceu sua senha?</a>',
+                                unsafe_allow_html=True)
+
+                submit = st.form_submit_button("→  ENTRAR", width='stretch')
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown("""
+            <div class="login-bottom-sep">
+                <span class="line"></span>
+                <span class="text">A sua vantagem em cada análise</span>
+                <span class="line"></span>
+            </div>
+            <div class="login-brand-footer">
+                <div class="bf-left">
+                    <span class="ic">💀</span>
+                    <span class="bname">E-Soccer<br><span class="grad">Fifa Analytics</span></span>
+                </div>
+                <div class="bf-right">
+                    INTELIGÊNCIA<br><b>PARA A SUA APOSTA</b>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # ── COLUNA DIREITA: imagem do jogador ──
+        with col_right:
+            img_src = _img_src(LOGIN_IMAGE)
+            if img_src:
+                st.markdown(
+                    f'<div class="login-right-img"><img src="{img_src}" alt="" /></div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="login-right-img" style="display:flex; align-items:center;
+                    justify-content:center; background:linear-gradient(135deg,
+                    rgba(0,245,255,0.05), rgba(181,55,255,0.05));
+                    font-size:48px; opacity:0.4;">
+                    ⚽
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ── Submit ──
+    if submit:
+        if check_credentials(user.strip(), pwd):
+            st.session_state.autenticado = True
+            st.session_state.usuario_logado = user.strip() or "convidado"
+            st.rerun()
+        else:
+            st.error("❌ Usuário ou chave incorretos.")
 
 
 # ============================================
@@ -2278,6 +2642,11 @@ def page_liga(league_name):
 # ============================================
 # GLOBAL + SIDEBAR
 # ============================================
+# ── BLOQUEIO DE LOGIN ──
+if not st.session_state.autenticado:
+    render_login()
+    st.stop()
+
 scraper = EFootballScraper()
 with st.sidebar:
     st.markdown("""<div class="sb-brand">
@@ -2322,6 +2691,18 @@ with st.sidebar:
             st.success(f"✅ {msg}")
         else:
             st.error(f"❌ {msg}")
+
+    # ── LOGOUT ──
+    st.markdown("---")
+    st.markdown(
+        f'<div style="font-size:11px; color:#7a89a8; text-align:center; padding:4px 0;">'
+        f'Logado como <b style="color:#00f5ff;">{st.session_state.usuario_logado}</b></div>',
+        unsafe_allow_html=True)
+    if st.button("🚪 Sair", width='stretch', key='logout_btn'):
+        st.session_state.autenticado = False
+        st.session_state.usuario_logado = ''
+        st.rerun()
+
     st.markdown(f"""<div class="sb-footer">
         FIFAlgorithm v6.5.8 - Streamlit
         <div class="sb-footer-user">
