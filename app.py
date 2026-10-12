@@ -1574,22 +1574,72 @@ def monte_carlo_cached(df: pd.DataFrame, ad: dict, ns: int = N_SIMULATIONS, seed
 class EFootballScraper:
     def __init__(self):
         self.base_url = "https://24live.com/api"
+        self._playwright_ok = None  # detecta na primeira chamada
+
+    def _fetch_via_playwright(self, url: str, params: dict, timeout: int = 30):
+        """Busca via Chromium real (passa pelo Cloudflare)"""
         try:
-            import cloudscraper
-            self.session = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False},
-                delay=2
-            )
+            from playwright.sync_api import sync_playwright
         except ImportError:
-            self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Referer': 'https://24live.com/pt/',
-            'Origin': 'https://24live.com',
-        })
-    def get_league_matches(self, sid, max_retries=3, timeout=30):
+            return None
+
+        # Monta URL com query string
+        import urllib.parse
+        full_url = f"{url}?{urllib.parse.urlencode(params)}"
+
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--single-process',
+                    ]
+                )
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/131.0.0.0 Safari/537.36',
+                    locale='pt-BR',
+                    viewport={'width': 1920, 'height': 1080},
+                )
+                page = context.new_page()
+
+                # Vai primeiro na home pra pegar cookies do Cloudflare
+                page.goto('https://24live.com/pt/', wait_until='domcontentloaded', timeout=timeout * 1000)
+                page.wait_for_timeout(3000)
+
+                # Agora faz a chamada da API
+                response = page.goto(full_url, wait_until='domcontentloaded', timeout=timeout * 1000)
+                page.wait_for_timeout(1500)
+
+                text = page.content()
+                browser.close()
+
+                # Tenta extrair o JSON do body (pode vir dentro de <pre>)
+                from bs4 import BeautifulSoup as _BS
+                soup = _BS(text, 'html.parser')
+                body = soup.find('pre') or soup.find('body')
+                raw = body.get_text() if body else text
+
+                import json as _json
+                try:
+                    return _json.loads(raw)
+                except Exception:
+                    # tenta achar o JSON dentro do HTML
+                    m = re.search(r'(\[.*\]|\{.*\})', raw, re.DOTALL)
+                    if m:
+                        try: return _json.loads(m.group(1))
+                        except: pass
+                    return None
+        except Exception as e:
+            st.session_state['_fetch_errors'].append(f"Playwright: {type(e).__name__}: {e}")
+            return None
+
+    def get_league_matches(self, sid, max_retries=2, timeout=30):
         url = f"{self.base_url}/match-list-data/105"
         now = datetime.now()
         st_ = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1601,23 +1651,32 @@ class EFootballScraper:
             'to': en.strftime('%Y-%m-%d %H:%M:%S'),
             'defaultSubtournamentLimit': 1000, 'orderBy': 'desc'
         }
-        last_err = None
-        for attempt in range(max_retries):
-            try:
-                r = self.session.get(url, params=params, timeout=timeout)
-                if r.status_code == 200: return r.json()
-                elif r.status_code in (429, 503):
-                    time.sleep(2 ** attempt); continue
-                else:
-                    last_err = f"HTTP {r.status_code}"; time.sleep(1 + attempt); continue
-            except requests.exceptions.ReadTimeout:
-                last_err = "Read timeout"; time.sleep(2 ** attempt)
-            except requests.exceptions.ConnectionError:
-                last_err = "Connection error"; time.sleep(2 ** attempt)
-            except Exception as e:
-                last_err = str(e); time.sleep(1)
+
+        # ---- Tentativa 1: cloudscraper (rápido) ----
+        try:
+            import cloudscraper
+            sess = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
+            sess.headers.update({
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'pt-BR,pt;q=0.9',
+                'Referer': 'https://24live.com/pt/',
+                'Origin': 'https://24live.com',
+            })
+            r = sess.get(url, params=params, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+
+        # ---- Tentativa 2: Playwright (Chromium real) ----
+        result = self._fetch_via_playwright(url, params, timeout=timeout)
+        if result is not None:
+            return result
+
+        # ---- Falhou tudo ----
         if '_fetch_errors' not in st.session_state: st.session_state['_fetch_errors'] = []
-        st.session_state['_fetch_errors'].append(f"{sid}: {last_err}")
+        st.session_state['_fetch_errors'].append(f"{sid}: Todas as tentativas falharam (403)")
         return []
 
     def extract(self, data):
@@ -1671,7 +1730,6 @@ class EFootballScraper:
         self.last_debug = {'total': total, 'ended': ended, 'matched_today': mt,
                            'today_str': today, 'sample_dates': sm}
         return out
-
 
 def test_24live_connectivity():
     try:
