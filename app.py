@@ -1574,18 +1574,21 @@ def monte_carlo_cached(df: pd.DataFrame, ad: dict, ns: int = N_SIMULATIONS, seed
 class EFootballScraper:
     def __init__(self):
         self.base_url = "https://24live.com/api"
-        self.session = requests.Session()
+        try:
+            import cloudscraper
+            self.session = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False},
+                delay=2
+            )
+        except ImportError:
+            self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://24live.com/pt/',
             'Origin': 'https://24live.com',
-            'Connection': 'keep-alive',
-            'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Site': 'same-origin',
         })
-
     def get_league_matches(self, sid, max_retries=3, timeout=30):
         url = f"{self.base_url}/match-list-data/105"
         now = datetime.now()
@@ -1672,15 +1675,19 @@ class EFootballScraper:
 
 def test_24live_connectivity():
     try:
-        r = requests.get("https://24live.com/", timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
-        return r.status_code == 200, f"HTTP {r.status_code}"
+        import cloudscraper
+        scraper_test = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
+        r = scraper_test.get("https://24live.com/api/match-list-data/105", timeout=15, params={
+            'lang': 'pt', 'type': 'all', 'subtournamentIds': '179369',
+            'from': (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+            'to': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+        }, headers={'Accept': 'application/json', 'Referer': 'https://24live.com/pt/'})
+        return r.status_code == 200, f"HTTP {r.status_code} · {len(r.text)} bytes"
     except requests.exceptions.ReadTimeout:
         return False, "Timeout — site lento ou bloqueando"
-    except requests.exceptions.ConnectionError:
-        return False, "Sem conexão — verifique internet/firewall"
     except Exception as e:
-        return False, str(e)
+        return False, f"{type(e).__name__}: {e}"
 
 
 def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
