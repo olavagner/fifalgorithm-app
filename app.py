@@ -1,5 +1,5 @@
-# app.py — E-Soccer Fifa Analytics v6.12.1
-# (Cache MC + Hero IN ALGORITHM + Debug V2 teste API 24live)
+# app.py — E-Soccer Fifa Analytics v6.13.0
+# (Playwright para Cloudflare + Cache MC + Hero IN ALGORITHM)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,10 +9,17 @@ import re
 import math
 import base64
 import json
+import os
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from collections import Counter
 from io import BytesIO
+
+# Instala Chromium na primeira execução (Streamlit Cloud)
+try:
+    os.system("playwright install chromium 2>/dev/null")
+except Exception:
+    pass
 
 from reportlab.lib import colors as rl_colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -88,18 +95,15 @@ EXTRA_COLUMNS = [
 
 
 # ============================================
-# CSS — DARK NEON THEME + LAYOUT V2 COMPACTO
+# CSS — DARK NEON THEME
 # ============================================
 def get_css(modo_claro=False):
-    bg_card = "rgba(15,20,35,0.85)"
     bg_card2 = "rgba(20,25,45,0.65)"
     txt = "#f0f5ff"
     txt_dim = "#7a89a8"
     border = "rgba(0,229,255,0.22)"
     accent = "#00f5ff"
     accent2 = "#b537ff"
-    accent3 = "#00ff88"
-    accent4 = "#ff2e88"
     bg_gradient = ("radial-gradient(circle at 15% 0%, rgba(0,245,255,0.09), transparent 45%), "
                    "radial-gradient(circle at 85% 100%, rgba(181,55,255,0.09), transparent 45%), "
                    "radial-gradient(circle at 50% 50%, rgba(0,255,136,0.03), transparent 60%), #05070f")
@@ -109,18 +113,14 @@ def get_css(modo_claro=False):
     base = f"""<style>
 * {{ font-family: 'Inter', -apple-system, sans-serif; }}
 .stApp {{ background: {bg_gradient}; }}
-
 html, body {{ margin: 0 !important; padding: 0 !important; }}
 .stApp {{ margin-top: 0 !important; padding-top: 0 !important; }}
 [data-testid="stAppViewContainer"] {{ padding-top: 0 !important; margin-top: 0 !important; }}
 [data-testid="stAppViewContainer"] > .main {{ padding-top: 0 !important; margin-top: 0 !important; }}
 [data-testid="stAppViewContainer"] .main .block-container {{
-    padding-top: 0 !important;
-    margin-top: -30px !important;
-    padding-bottom: 0.1rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
-    max-width: 100% !important;
+    padding-top: 0 !important; margin-top: -30px !important;
+    padding-bottom: 0.1rem !important; padding-left: 0.8rem !important;
+    padding-right: 0.8rem !important; max-width: 100% !important;
 }}
 [data-testid="stHeader"], .stApp > header, [data-testid="stToolbar"],
 [data-testid="stDecoration"], [data-testid="stStatusWidget"] {{
@@ -134,48 +134,36 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
 .main .block-container > div > [data-testid="stVerticalBlock"]:first-child > div:first-child {{
     margin-top: 0 !important; padding-top: 0 !important;
 }}
-
 .stButton > button[kind="primary"] {{
     background: linear-gradient(135deg, {accent} 0%, {accent2} 100%) !important;
     border: none !important; color: #05070f !important;
     font-weight: 800 !important; border-radius: 8px !important;
     padding: 6px 14px !important; font-size: 12.5px !important;
     box-shadow: 0 0 22px rgba(0,245,255,0.45), 0 0 40px rgba(181,55,255,0.25) !important;
-    transition: all 0.2s !important;
-    height: 32px !important;
-    min-height: 32px !important;
-    letter-spacing: 0.3px;
+    transition: all 0.2s !important; height: 32px !important;
+    min-height: 32px !important; letter-spacing: 0.3px;
 }}
 .stButton > button[kind="primary"]:hover {{
     box-shadow: 0 0 32px rgba(0,245,255,0.7), 0 0 60px rgba(181,55,255,0.4) !important;
     transform: translateY(-1px);
 }}
 .stButton > button {{
-    background: {bg_card2} !important;
-    border: 1px solid {border} !important;
-    color: {txt} !important;
-    border-radius: 8px !important;
-    font-weight: 700 !important;
-    padding: 6px 14px !important;
-    font-size: 12.5px !important;
-    transition: all 0.2s !important;
-    height: 32px !important;
-    min-height: 32px !important;
+    background: {bg_card2} !important; border: 1px solid {border} !important;
+    color: {txt} !important; border-radius: 8px !important;
+    font-weight: 700 !important; padding: 6px 14px !important;
+    font-size: 12.5px !important; transition: all 0.2s !important;
+    height: 32px !important; min-height: 32px !important;
 }}
 .stButton > button:hover {{
-    border-color: {accent} !important;
-    color: {accent} !important;
+    border-color: {accent} !important; color: {accent} !important;
     box-shadow: 0 0 18px rgba(0,245,255,0.35) !important;
 }}
-
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
 ::-webkit-scrollbar-thumb {{ background: linear-gradient(180deg, {accent}, {accent2}); border-radius: 4px;
                              box-shadow: 0 0 8px rgba(0,245,255,0.5); }}
-
 [data-testid="stSidebar"] {{ background: {sidebar_bg} !important; border-right: 1px solid {sidebar_border}; }}
 [data-testid="stSidebar"] > div:first-child {{ padding-top: 0.5rem !important; }}
-
 .sb-brand {{ display: flex; align-items: center; gap: 12px;
     padding: 14px 14px 18px 14px;
     border-bottom: 1px solid {sidebar_border}; margin-bottom: 10px; }}
@@ -188,18 +176,15 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 10px rgba(0,245,255,0.5)); }}
 .sb-brand-sub {{ font-size: 10.5px; color: {txt_dim}; margin-top: 2px; font-weight: 600; }}
-
 .sb-section {{ font-size: 10px; font-weight: 800; text-transform: uppercase;
     letter-spacing: 1px; color: {txt_dim}; padding: 12px 14px 6px 14px; }}
-
 [data-testid="stSidebar"] .stButton > button {{
     background: transparent !important; border: none !important;
     color: {txt_dim} !important; border-radius: 8px !important;
     font-weight: 700 !important; padding: 10px 14px !important;
     font-size: 13.5px !important; text-align: left !important;
     justify-content: flex-start !important; transition: all 0.15s !important;
-    margin-bottom: 2px !important; height: auto !important;
-    min-height: auto !important;
+    margin-bottom: 2px !important; height: auto !important; min-height: auto !important;
 }}
 [data-testid="stSidebar"] .stButton > button:hover {{
     background: rgba(0,245,255,0.1) !important; color: {accent} !important;
@@ -212,7 +197,6 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     box-shadow: 0 0 20px rgba(0,245,255,0.25) !important;
     text-shadow: 0 0 10px rgba(0,245,255,0.6);
 }}
-
 .sb-footer {{ padding: 12px 14px; border-top: 1px solid {sidebar_border};
     margin-top: 16px; font-size: 11px; color: {txt_dim}; }}
 .sb-footer-user {{ display: flex; align-items: center; gap: 10px;
@@ -223,27 +207,10 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 900; color: #05070f;
     box-shadow: 0 0 16px rgba(0,245,255,0.5); }}
-
-.warning-banner {{
-    background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
-    padding: 12px 18px;
-    border-radius: 10px;
-    border-left: 4px solid #ffd600;
-    color: {txt};
-    font-size: 13.5px;
-    margin: 10px 0 14px 0;
-    box-shadow: 0 0 24px rgba(255,214,0,0.15);
-}}
-.warning-banner b {{ color: #ffd600; }}
-
 div[data-baseweb="select"] > div {{ background: {bg_card2} !important; border: 1px solid {border} !important;
     border-radius: 8px !important; color: {txt} !important; min-height: 32px !important;
     font-size: 12.5px !important; }}
 div[data-baseweb="select"] svg {{ fill: {accent} !important; }}
-div[data-baseweb="input"] input {{ background: {bg_card2} !important; border: 1px solid {border} !important;
-    border-radius: 8px !important; color: {txt} !important; font-size: 12.5px !important;
-    padding: 6px 12px !important; min-height: 32px !important; }}
-
 .pbar {{ height: 8px; background: rgba(0,245,255,0.06); border-radius: 100px;
     overflow: hidden; margin-top: 6px; }}
 .pbar > div {{ height: 100%; border-radius: 100px; }}
@@ -253,7 +220,6 @@ div[data-baseweb="input"] input {{ background: {bg_card2} !important; border: 1p
     font-family: 'JetBrains Mono', monospace; }}
 .prog-val {{ font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
     text-shadow: 0 0 8px currentColor; }}
-
 .section-label {{ font-size: 12px; font-weight: 900; text-transform: uppercase;
     letter-spacing: 1.2px; color: {accent}; margin: 14px 0 10px 0;
     display: flex; align-items: center; gap: 8px;
@@ -261,40 +227,27 @@ div[data-baseweb="input"] input {{ background: {bg_card2} !important; border: 1p
 .section-label::before {{ content: ''; width: 3px; height: 14px;
     background: linear-gradient(180deg, {accent}, {accent2}); border-radius: 2px;
     box-shadow: 0 0 10px {accent}; }}
-
 [data-testid="stDataFrame"] {{ background: {bg_card2}; border-radius: 12px; border: 1px solid {border}; }}
 .stAlert {{ background: {bg_card2} !important; border-radius: 10px !important;
     border: 1px solid {border} !important; font-size: 13px !important;
     padding: 6px 12px !important; }}
-
-.streamlit-expanderHeader, details > summary {{
-    background: rgba(20,25,45,0.5) !important;
-    border: 1px solid {border} !important;
-    border-radius: 8px !important;
-    padding: 4px 10px !important;
-    color: {txt_dim} !important;
-    font-size: 11px !important; font-weight: 700 !important;
-    cursor: pointer !important; margin: 2px 0 !important;
-    list-style: none !important;
+details > summary {{
+    background: rgba(20,25,45,0.5) !important; border: 1px solid {border} !important;
+    border-radius: 8px !important; padding: 4px 10px !important;
+    color: {txt_dim} !important; font-size: 11px !important;
+    font-weight: 700 !important; cursor: pointer !important;
+    margin: 2px 0 !important; list-style: none !important;
 }}
-details[open] > summary {{
-    border-color: {accent} !important; color: {accent} !important;
-    background: rgba(0,245,255,0.08) !important; margin-bottom: 8px !important;
-    box-shadow: 0 0 16px rgba(0,245,255,0.2) !important;
-}}
-
+details[open] > summary {{ border-color: {accent} !important; color: {accent} !important;
+    background: rgba(0,245,255,0.08) !important; }}
 .h2h-card {{
     background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.95));
-    border: 1px solid rgba(0,245,255,0.3);
-    border-radius: 14px; padding: 18px 20px;
-    margin-top: 10px; margin-bottom: 20px;
+    border: 1px solid rgba(0,245,255,0.3); border-radius: 14px;
+    padding: 18px 20px; margin-top: 10px; margin-bottom: 20px;
     box-shadow: 0 0 30px rgba(0,245,255,0.1), inset 0 0 30px rgba(0,245,255,0.02);
 }}
-.h2h-header {{
-    display: flex; justify-content: space-between; align-items: center;
-    border-bottom: 1px solid rgba(0,245,255,0.15);
-    padding-bottom: 12px; margin-bottom: 14px;
-}}
+.h2h-header {{ display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(0,245,255,0.15); padding-bottom: 12px; margin-bottom: 14px; }}
 .h2h-team {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
 .h2h-team.right {{ align-items: flex-end; text-align: right; }}
 .h2h-team-name {{ font-size: 20px; font-weight: 900; color: #f0f5ff;
@@ -307,12 +260,6 @@ details[open] > summary {{
     text-shadow: 0 0 14px rgba(0,245,255,0.6); }}
 .h2h-match-info .league {{ font-size: 10px; color: #7a89a8; font-weight: 800;
     text-transform: uppercase; letter-spacing: 1px; }}
-.h2h-ppj-matchup {{ display: flex; justify-content: center; align-items: center;
-    gap: 12px; margin-top: 4px; padding: 6px 14px; border-radius: 100px;
-    background: rgba(0,245,255,0.06); border: 1px solid rgba(0,245,255,0.2);
-    font-family: 'JetBrains Mono', monospace; }}
-.h2h-ppj-matchup .val {{ font-size: 15px; font-weight: 900; }}
-.h2h-ppj-matchup .sep {{ color: #7a89a8; font-weight: 700; }}
 .h2h-table {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
 .h2h-col {{ display: flex; flex-direction: column; gap: 8px; }}
 .h2h-row {{ display: flex; justify-content: space-between; align-items: center;
@@ -333,7 +280,6 @@ details[open] > summary {{
     font-family: 'JetBrains Mono', monospace; width: 42px; text-align: right; flex-shrink: 0; }}
 .h2h-row-avg.ht {{ color: #b537ff; }}
 .h2h-row-avg.ft {{ color: #00ff88; }}
-
 .league-card {{ padding: 14px 18px; margin: 8px 0; border-radius: 12px;
     background: {bg_card2}; border: 1px solid {border}; border-left: 3px solid {accent};
     box-shadow: 0 0 20px rgba(0,245,255,0.08); }}
@@ -357,133 +303,87 @@ details[open] > summary {{
 .best-reason {{ margin-top: 12px; padding: 10px 14px; border-radius: 10px;
     background: rgba(0,255,136,0.08); border-left: 3px solid #00ff88;
     font-size: 13px; line-height: 1.6; color: {txt}; }}
-.best-reason b {{ color: #00ff88; text-shadow: 0 0 10px rgba(0,255,136,0.6); }}
-.best-reason .hl {{ color: {accent}; font-weight: 800; text-shadow: 0 0 10px rgba(0,245,255,0.5); }}
-
+.best-reason b {{ color: #00ff88; }}
+.best-reason .hl {{ color: {accent}; font-weight: 800; }}
 .thermometer {{ height: 6px; border-radius: 100px; background: rgba(0,245,255,0.08);
     margin-top: 8px; overflow: hidden; border: 1px solid {border}; }}
 .thermometer > div {{ height: 100%; background: linear-gradient(90deg, {accent2}, {accent});
     box-shadow: 0 0 12px {accent}; }}
 .badge-ofensivo {{ background: linear-gradient(135deg, #00ff88, #00cc6a); color: #05070f;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(0,255,136,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .badge-equilibrado {{ background: linear-gradient(135deg, {accent}, #0099cc); color: #05070f;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(0,245,255,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .badge-defensivo {{ background: linear-gradient(135deg, {accent2}, #7c3aed); color: #fff;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(181,55,255,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .badge-ht-heavy {{ background: linear-gradient(135deg, #ff8c00, #ff2e88); color: #fff;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(255,140,0,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .badge-ft-heavy {{ background: linear-gradient(135deg, #00f5ff, #0099cc); color: #05070f;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(0,245,255,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .badge-balanced {{ background: linear-gradient(135deg, #7a89a8, #4a5568); color: #fff;
-    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
-    box-shadow: 0 0 15px rgba(122,137,168,0.5); }}
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900; }}
 .dual-bar {{ display: flex; height: 8px; border-radius: 100px;
     overflow: hidden; margin-top: 10px;
     border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); }}
-.dual-bar .ht {{ background: linear-gradient(90deg, #ff8c00, #ff2e88);
-    box-shadow: 0 0 10px rgba(255,140,0,0.5); }}
-.dual-bar .ft {{ background: linear-gradient(90deg, #00f5ff, #b537ff);
-    box-shadow: 0 0 10px rgba(0,245,255,0.5); }}
-
+.dual-bar .ht {{ background: linear-gradient(90deg, #ff8c00, #ff2e88); }}
+.dual-bar .ft {{ background: linear-gradient(90deg, #00f5ff, #b537ff); }}
 .rank-list {{ display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }}
-.rank-header, .rank-row {{
-    display: grid; gap: 6px; align-items: center;
-    padding: 8px 12px; border-radius: 8px;
-}}
-.rank-header.r1, .rank-row.r1 {{
-    grid-template-columns: 44px minmax(120px, 1.2fr) 42px minmax(200px, 2fr) 60px 60px 60px 60px 60px; }}
-.rank-header.r2, .rank-row.r2 {{
-    grid-template-columns: 44px minmax(140px, 1.5fr) 42px 90px 90px 90px 90px; }}
-.rank-header.r3, .rank-row.r3 {{
-    grid-template-columns: 44px minmax(130px, 1.4fr) 42px 75px 75px 75px 75px 75px 75px 85px; }}
-.rank-header.r4, .rank-row.r4 {{
-    grid-template-columns: 44px minmax(140px, 1.5fr) 42px 80px 120px 120px; }}
-.rank-header {{
-    background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
-    border: 1px solid rgba(0,245,255,0.4);
-    box-shadow: 0 0 15px rgba(0,245,255,0.1);
-    padding: 10px 12px;
-}}
+.rank-header, .rank-row {{ display: grid; gap: 6px; align-items: center;
+    padding: 8px 12px; border-radius: 8px; }}
+.rank-header.r1, .rank-row.r1 {{ grid-template-columns: 44px minmax(120px, 1.2fr) 42px minmax(200px, 2fr) 60px 60px 60px 60px 60px; }}
+.rank-header.r2, .rank-row.r2 {{ grid-template-columns: 44px minmax(140px, 1.5fr) 42px 90px 90px 90px 90px; }}
+.rank-header.r3, .rank-row.r3 {{ grid-template-columns: 44px minmax(130px, 1.4fr) 42px 75px 75px 75px 75px 75px 75px 85px; }}
+.rank-header.r4, .rank-row.r4 {{ grid-template-columns: 44px minmax(140px, 1.5fr) 42px 80px 120px 120px; }}
+.rank-header {{ background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
+    border: 1px solid rgba(0,245,255,0.4); padding: 10px 12px; }}
 .rank-hcell {{ font-size: 10px; font-weight: 900; color: #00f5ff;
     text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
     text-shadow: 0 0 8px rgba(0,245,255,0.5); white-space: nowrap; }}
 .rank-row {{ background: rgba(15,20,35,0.85);
-    border: 1px solid rgba(0,245,255,0.15); transition: all 0.15s; }}
-.rank-row:hover {{ border-color: rgba(0,245,255,0.5);
-    box-shadow: 0 0 18px rgba(0,245,255,0.15); background: rgba(20,28,50,0.9); }}
+    border: 1px solid rgba(0,245,255,0.15); }}
 .rank-pos {{ font-size: 15px; font-weight: 900; text-align: center; }}
 .rank-name {{ font-size: 13px; font-weight: 900; color: #f0f5ff;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-shadow: 0 0 8px rgba(0,245,255,0.3); }}
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
 .rank-num {{ font-size: 12.5px; font-weight: 800;
     font-family: 'JetBrains Mono', monospace; text-align: center; color: #f0f5ff; }}
-.rank-form {{ display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; }}
-
-.lp-market-card {{
-    position: relative; padding: 16px 18px; border-radius: 14px;
+.rank-form {{ display: flex; gap: 3px; justify-content: center; }}
+.lp-market-card {{ position: relative; padding: 16px 18px; border-radius: 14px;
     background: linear-gradient(135deg, rgba(0,245,255,0.05) 0%, rgba(181,55,255,0.04) 100%);
-    border: 1px solid rgba(0,245,255,0.3);
-    box-shadow: 0 0 24px rgba(0,245,255,0.08), inset 0 0 20px rgba(0,245,255,0.03);
-    transition: all 0.25s ease; overflow: hidden; margin-bottom: 10px;
-}}
+    border: 1px solid rgba(0,245,255,0.3); margin-bottom: 10px; }}
 .lp-market-card .lp-title {{ font-size: 13px; font-weight: 900; color: #f0f5ff;
     text-transform: uppercase; letter-spacing: 1px;
     display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }}
 .lp-market-card .lp-row {{ display: flex; justify-content: space-between;
     font-size: 12.5px; padding: 4px 0; color: #7a89a8; }}
-.lp-market-card .lp-row b {{ color: #f0f5ff;
-    font-family: 'JetBrains Mono', monospace; font-weight: 800; }}
-
 #MainMenu, footer {{ visibility: hidden; }}
 header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
-
 .hero-v2 {{
     display: flex; justify-content: space-between; align-items: center;
     padding: 20px 28px; margin-bottom: 16px;
     background: linear-gradient(135deg, rgba(5,8,20,0.98) 0%, rgba(10,15,30,0.98) 100%);
     border: 1.5px solid rgba(0,245,255,0.4); border-radius: 14px;
-    box-shadow: 0 0 50px rgba(0,245,255,0.15), inset 0 0 50px rgba(0,245,255,0.03);
+    box-shadow: 0 0 50px rgba(0,245,255,0.15);
     position: relative; overflow: hidden;
 }}
-.hero-v2::before {{
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+.hero-v2::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
     background: linear-gradient(90deg, transparent, #00f5ff, #b537ff, #00f5ff, transparent);
-    box-shadow: 0 0 25px rgba(0,245,255,0.9);
-}}
-.hero-v2::after {{
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(181,55,255,0.6), transparent);
-}}
+    box-shadow: 0 0 25px rgba(0,245,255,0.9); }}
 .hero-v2-left {{ display: flex; align-items: center; gap: 22px; }}
-.hero-v2-logo {{
-    width: 76px; height: 76px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 52px;
+.hero-v2-logo {{ width: 76px; height: 76px;
+    display: flex; align-items: center; justify-content: center; font-size: 52px;
     filter: drop-shadow(0 0 25px rgba(0,245,255,0.9)) drop-shadow(0 0 45px rgba(181,55,255,0.5));
-    animation: heroLogoPulse 3s ease-in-out infinite;
-}}
+    animation: heroLogoPulse 3s ease-in-out infinite; }}
 @keyframes heroLogoPulse {{
     0%,100% {{ filter: drop-shadow(0 0 25px rgba(0,245,255,0.9)); transform: scale(1); }}
     50%     {{ filter: drop-shadow(0 0 35px rgba(181,55,255,1)); transform: scale(1.03); }}
 }}
 .hero-v2-title-block {{ display: flex; flex-direction: column; gap: 8px; }}
-.hero-v2-title {{
-    font-size: 36px; font-weight: 900; letter-spacing: -0.8px; color: #f0f5ff;
-    text-shadow: 0 0 35px rgba(0,245,255,0.5);
+.hero-v2-title {{ font-size: 36px; font-weight: 900; letter-spacing: -0.8px;
+    color: #f0f5ff; text-shadow: 0 0 35px rgba(0,245,255,0.5);
     line-height: 1; font-style: italic;
-    display: flex; align-items: center; gap: 12px;
-}}
-.hero-v2-title .bolt {{ color: #00f5ff; filter: drop-shadow(0 0 15px #00f5ff); font-style: normal; }}
-.hero-v2-accent {{
-    background: linear-gradient(135deg, #00f5ff 0%, #b537ff 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 22px rgba(181,55,255,0.8));
-}}
+    display: flex; align-items: center; gap: 12px; }}
+.hero-v2-title .bolt {{ color: #00f5ff; font-style: normal; }}
+.hero-v2-accent {{ background: linear-gradient(135deg, #00f5ff 0%, #b537ff 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
 .hero-v2-tagline {{ display: flex; align-items: center; gap: 12px;
     font-size: 11.5px; font-weight: 700; }}
 .hero-v2-at {{ color: #00f5ff; font-weight: 900; font-size: 13px;
@@ -493,71 +393,45 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 .hero-v2-right {{ display: flex; align-items: center; gap: 22px; }}
 .hero-v2-right-text {{ text-align: right; }}
 .hero-v2-rl1 {{ font-size: 13.5px; font-weight: 800;
-    color: #f0f5ff; letter-spacing: 2px;
-    text-shadow: 0 0 12px rgba(0,245,255,0.3); }}
+    color: #f0f5ff; letter-spacing: 2px; }}
 .hero-v2-rl2 {{ font-size: 17px; font-weight: 900;
     letter-spacing: 2px; color: #f0f5ff; margin-top: 2px; }}
-.hero-v2-hl {{
-    background: linear-gradient(135deg, #00f5ff, #b537ff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 18px rgba(0,245,255,0.8));
-}}
-.hero-v2-badge {{
-    width: 78px; height: 78px; border-radius: 20px;
+.hero-v2-hl {{ background: linear-gradient(135deg, #00f5ff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+.hero-v2-badge {{ width: 78px; height: 78px; border-radius: 20px;
     background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.98));
     border: 2px solid rgba(0,245,255,0.55);
     display: flex; align-items: center; justify-content: center;
     position: relative;
-    box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08);
-    animation: badgePulse 3s ease-in-out infinite;
-    overflow: hidden; flex-shrink: 0;
-}}
-.hero-v2-badge::before {{
-    content: ''; position: absolute; inset: -50%;
+    box-shadow: 0 0 30px rgba(0,245,255,0.45);
+    animation: badgePulse 3s ease-in-out infinite; overflow: hidden; flex-shrink: 0; }}
+.hero-v2-badge::before {{ content: ''; position: absolute; inset: -50%;
     background: conic-gradient(from 0deg, transparent, #00f5ff, transparent, #b537ff, transparent);
-    animation: badgeRotate 4s linear infinite; opacity: 0.45; z-index: 0;
-}}
-.hero-v2-badge::after {{
-    content: ''; position: absolute; inset: 2px; border-radius: 16px;
-    background: linear-gradient(135deg, rgba(8,12,25,0.99), rgba(15,20,40,0.99));
-    z-index: 1;
-}}
-.hero-v2-badge .badge-emoji {{
-    position: relative; z-index: 2; font-size: 40px;
-    filter: drop-shadow(0 0 14px rgba(0,245,255,0.9));
-}}
+    animation: badgeRotate 4s linear infinite; opacity: 0.45; z-index: 0; }}
+.hero-v2-badge::after {{ content: ''; position: absolute; inset: 2px; border-radius: 16px;
+    background: linear-gradient(135deg, rgba(8,12,25,0.99), rgba(15,20,40,0.99)); z-index: 1; }}
+.hero-v2-badge .badge-emoji {{ position: relative; z-index: 2; font-size: 40px;
+    filter: drop-shadow(0 0 14px rgba(0,245,255,0.9)); }}
 @keyframes badgePulse {{
-    0%,100% {{ box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08); }}
-    50%     {{ box-shadow: 0 0 48px rgba(181,55,255,0.75), inset 0 0 30px rgba(181,55,255,0.18); }}
+    0%,100% {{ box-shadow: 0 0 30px rgba(0,245,255,0.45); }}
+    50%     {{ box-shadow: 0 0 48px rgba(181,55,255,0.75); }}
 }}
 @keyframes badgeRotate {{ to {{ transform: rotate(360deg); }} }}
-
-.info-v2-row {{
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 12px; margin-bottom: 14px;
-}}
-.info-v2-card {{
-    display: flex; align-items: center; gap: 14px;
+.info-v2-row {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px; margin-bottom: 14px; }}
+.info-v2-card {{ display: flex; align-items: center; gap: 14px;
     padding: 14px 20px;
     background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(15,20,40,0.92) 100%);
     border: 1.5px solid rgba(0,245,255,0.35); border-radius: 12px;
-    box-shadow: 0 0 28px rgba(0,245,255,0.1), inset 0 0 22px rgba(0,245,255,0.03);
-    position: relative; overflow: hidden;
-}}
-.info-v2-card::before {{
-    content: ''; position: absolute; top: 0; left: 0;
+    position: relative; overflow: hidden; }}
+.info-v2-card::before {{ content: ''; position: absolute; top: 0; left: 0;
     width: 3px; height: 100%;
-    background: linear-gradient(180deg, #00f5ff, #b537ff);
-    box-shadow: 0 0 14px #00f5ff;
-}}
-.info-v2-icon {{
-    width: 46px; height: 46px; border-radius: 11px;
+    background: linear-gradient(180deg, #00f5ff, #b537ff); }}
+.info-v2-icon {{ width: 46px; height: 46px; border-radius: 11px;
     background: linear-gradient(135deg, rgba(0,245,255,0.18), rgba(181,55,255,0.14));
     border: 1px solid rgba(0,245,255,0.35);
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; flex-shrink: 0;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.6));
-}}
+    font-size: 22px; flex-shrink: 0; }}
 .info-v2-content {{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
 .info-v2-label {{ font-size: 9.5px; font-weight: 900; color: #7a89a8;
     text-transform: uppercase; letter-spacing: 1.6px; }}
@@ -565,71 +439,56 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
     background: linear-gradient(135deg, #ffffff, #00f5ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     font-family: 'JetBrains Mono', monospace;
-    line-height: 1; letter-spacing: -0.5px;
-    filter: drop-shadow(0 0 14px rgba(0,245,255,0.7)); }}
+    line-height: 1; letter-spacing: -0.5px; }}
 .info-v2-value.purple {{
     background: linear-gradient(135deg, #ffffff, #b537ff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 14px rgba(181,55,255,0.7)); }}
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
 .info-v2-sub {{ font-size: 10px; font-weight: 800; color: #7a89a8;
     letter-spacing: 1px; margin-top: 2px; }}
 .info-v2-prob-text {{ font-size: 13px; font-weight: 800; color: #00f5ff;
     font-family: 'JetBrains Mono', monospace;
-    text-shadow: 0 0 12px rgba(0,245,255,0.6); letter-spacing: 0.3px; }}
+    text-shadow: 0 0 12px rgba(0,245,255,0.6); }}
 .info-v2-online {{ margin-left: auto;
     display: inline-flex; align-items: center; gap: 7px;
     padding: 6px 14px; background: rgba(0,255,136,0.1);
     border: 1px solid rgba(0,255,136,0.45); border-radius: 100px;
-    font-size: 10px; font-weight: 900; color: #00ff88; letter-spacing: 1.2px;
-    text-shadow: 0 0 12px rgba(0,255,136,0.7); }}
+    font-size: 10px; font-weight: 900; color: #00ff88; letter-spacing: 1.2px; }}
 .info-v2-dot {{ width: 7px; height: 7px; border-radius: 50%;
     background: #00ff88; box-shadow: 0 0 12px #00ff88; animation: pulse 2s infinite; }}
 @keyframes pulse {{
     0%,100% {{ opacity: 1; transform: scale(1); }}
     50%     {{ opacity: 0.5; transform: scale(1.2); }}
 }}
-
 .match-v2-header, .match-v2-row {{
     display: grid;
     grid-template-columns: 135px 320px 115px 130px 130px minmax(400px, 1fr);
     gap: 6px;
 }}
-.match-v2-header {{
-    padding: 9px 10px;
+.match-v2-header {{ padding: 9px 10px;
     background: linear-gradient(135deg, rgba(0,245,255,0.1), rgba(181,55,255,0.06));
     border: 1.5px solid rgba(0,245,255,0.45);
-    border-radius: 10px; margin-bottom: 5px;
-    box-shadow: 0 0 24px rgba(0,245,255,0.14);
-}}
+    border-radius: 10px; margin-bottom: 5px; }}
 .mvh-cell {{ font-size: 10px; font-weight: 900; color: #00f5ff;
     text-transform: uppercase; letter-spacing: 0.9px; text-align: center;
-    display: flex; align-items: center; justify-content: center;
-    text-shadow: 0 0 12px rgba(0,245,255,0.7); }}
-.match-v2-row {{
-    padding: 7px 10px;
+    display: flex; align-items: center; justify-content: center; }}
+.match-v2-row {{ padding: 7px 10px;
     background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(12,18,35,0.88) 100%);
     border: 1.5px solid rgba(0,245,255,0.22); border-radius: 10px; margin-bottom: 5px;
-    transition: all 0.2s; align-items: stretch;
-}}
-.match-v2-row:hover {{
-    border-color: rgba(0,245,255,0.65);
-    box-shadow: 0 0 32px rgba(0,245,255,0.22); transform: translateY(-1px);
-}}
+    align-items: stretch; }}
 .mv-box {{ display: flex; flex-direction: column; justify-content: center;
     padding: 6px 9px; border-radius: 8px;
-    background: rgba(0,245,255,0.03); border: 1px solid rgba(0,245,255,0.15);
+    background: rgba(0,245,255,0.03);
+    border: 1px solid rgba(0,245,255,0.15);
     min-height: 54px; overflow: hidden; }}
 .mv-time {{ align-items: center; text-align: center; }}
 .mv-time-val {{ font-size: 17px; font-weight: 900; color: #f0f5ff;
-    font-family: 'JetBrains Mono', monospace;
-    text-shadow: 0 0 16px rgba(0,245,255,0.55);
-    line-height: 1; letter-spacing: -0.5px; }}
+    font-family: 'JetBrains Mono', monospace; line-height: 1; }}
 .mv-league-tag {{ font-size: 8.5px; font-weight: 900; color: #00f5ff;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    background: rgba(0,245,255,0.1); border: 1px solid rgba(0,245,255,0.35);
+    text-transform: uppercase;
+    background: rgba(0,245,255,0.1);
+    border: 1px solid rgba(0,245,255,0.35);
     padding: 2px 8px; border-radius: 100px; margin-top: 4px;
-    white-space: nowrap; text-shadow: 0 0 10px rgba(0,245,255,0.7);
-    display: inline-block; }}
+    white-space: nowrap; display: inline-block; }}
 .mv-teams {{ flex-direction: row !important;
     align-items: center; justify-content: space-between;
     gap: 6px; padding: 6px 14px; }}
@@ -638,90 +497,64 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
     background: linear-gradient(135deg, #1a2540, #0f1424);
     border: 1.5px solid rgba(0,245,255,0.45);
     display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 900; color: #00f5ff;
-    box-shadow: 0 0 14px rgba(0,245,255,0.35);
-    flex-shrink: 0; text-shadow: 0 0 10px rgba(0,245,255,0.9); }}
-.mv-crest.away {{ color: #b537ff; border-color: rgba(181,55,255,0.45);
-    box-shadow: 0 0 14px rgba(181,55,255,0.35); }}
+    font-size: 10px; font-weight: 900; color: #00f5ff; flex-shrink: 0; }}
+.mv-crest.away {{ color: #b537ff; border-color: rgba(181,55,255,0.45); }}
 .mv-team-name {{ font-size: 14px; font-weight: 900; color: #f0f5ff;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    letter-spacing: 0.3px; }}
-.mv-team.left .mv-team-name {{
-    background: linear-gradient(135deg, #ffffff, #00f5ff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 8px rgba(0,245,255,0.5)); }}
-.mv-team.right .mv-team-name {{
-    background: linear-gradient(135deg, #ffffff, #b537ff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 8px rgba(181,55,255,0.5)); }}
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+.mv-team.left .mv-team-name {{ color: #00f5ff; }}
+.mv-team.right .mv-team-name {{ color: #b537ff; }}
 .mv-vs {{ font-size: 9px; font-weight: 900; color: #3a4a6a;
     padding: 3px 8px; background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 100px; flex-shrink: 0; }}
 .mv-media {{ align-items: center; justify-content: center; text-align: center; }}
 .mv-media-vals {{ display: flex; flex-direction: column; gap: 2px;
-    font-family: 'JetBrains Mono', monospace;
-    align-items: center; justify-content: center; }}
-.mv-media-vals .ht, .mv-media-vals .ft {{
-    font-size: 14px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px; }}
-.mv-media-vals .ht {{ color: #b537ff; text-shadow: 0 0 12px rgba(181,55,255,0.6); }}
-.mv-media-vals .ft {{ color: #00f5ff; text-shadow: 0 0 14px rgba(0,245,255,0.6); }}
+    font-family: 'JetBrains Mono', monospace; align-items: center; justify-content: center; }}
+.mv-media-vals .ht, .mv-media-vals .ft {{ font-size: 14px; font-weight: 900; line-height: 1.15; }}
+.mv-media-vals .ht {{ color: #b537ff; }}
+.mv-media-vals .ft {{ color: #00f5ff; }}
 .mv-bet {{ align-items: center; justify-content: center;
-    text-align: center; cursor: pointer; transition: all 0.2s;
-    padding: 6px 8px !important; }}
+    text-align: center; padding: 6px 8px !important; }}
 .mv-bet.green {{ background: linear-gradient(135deg, rgba(0,255,136,0.16), rgba(0,255,136,0.05));
-    border-color: rgba(0,255,136,0.55); box-shadow: 0 0 18px rgba(0,255,136,0.22); }}
+    border-color: rgba(0,255,136,0.55); }}
 .mv-bet.red {{ background: linear-gradient(135deg, rgba(255,46,136,0.16), rgba(255,46,136,0.05));
-    border-color: rgba(255,46,136,0.55); box-shadow: 0 0 18px rgba(255,46,136,0.22); }}
+    border-color: rgba(255,46,136,0.55); }}
 .mv-bet.cyan {{ background: linear-gradient(135deg, rgba(0,245,255,0.16), rgba(0,245,255,0.05));
-    border-color: rgba(0,245,255,0.55); box-shadow: 0 0 18px rgba(0,245,255,0.22); }}
+    border-color: rgba(0,245,255,0.55); }}
 .mv-bet.yellow {{ background: linear-gradient(135deg, rgba(255,214,0,0.16), rgba(255,214,0,0.05));
-    border-color: rgba(255,214,0,0.55); box-shadow: 0 0 18px rgba(255,214,0,0.22); }}
-.mv-bet-val {{ font-size: 18px; font-weight: 900;
-    letter-spacing: 0.3px; line-height: 1.15; text-align: center; }}
+    border-color: rgba(255,214,0,0.55); }}
+.mv-bet-val {{ font-size: 18px; font-weight: 900; line-height: 1.15; text-align: center; }}
 .mv-bet-line {{ font-size: 11.5px; font-weight: 900;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    margin-top: 4px; opacity: 0.95; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis; max-width: 100%; text-align: center; }}
-.mv-bet.green .mv-bet-val {{ color: #00ff88; text-shadow: 0 0 16px rgba(0,255,136,0.8); }}
-.mv-bet.red   .mv-bet-val {{ color: #ff2e88; text-shadow: 0 0 16px rgba(255,46,136,0.8); }}
-.mv-bet.cyan  .mv-bet-val {{ color: #00f5ff; text-shadow: 0 0 16px rgba(0,245,255,0.8); }}
-.mv-bet.yellow .mv-bet-val {{ color: #ffd600; text-shadow: 0 0 16px rgba(255,214,0,0.8); }}
-.mv-bet.green .mv-bet-line {{ color: #00ff88; text-shadow: 0 0 10px rgba(0,255,136,0.7); }}
-.mv-bet.red   .mv-bet-line {{ color: #ff2e88; text-shadow: 0 0 10px rgba(255,46,136,0.7); }}
-.mv-bet.cyan  .mv-bet-line {{ color: #00f5ff; text-shadow: 0 0 10px rgba(0,245,255,0.7); }}
-.mv-bet.yellow .mv-bet-line {{ color: #ffd600; text-shadow: 0 0 10px rgba(255,214,0,0.7); }}
-
+    text-transform: uppercase; margin-top: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }}
+.mv-bet.green .mv-bet-val {{ color: #00ff88; }}
+.mv-bet.red   .mv-bet-val {{ color: #ff2e88; }}
+.mv-bet.cyan  .mv-bet-val {{ color: #00f5ff; }}
+.mv-bet.yellow .mv-bet-val {{ color: #ffd600; }}
+.mv-bet.green .mv-bet-line {{ color: #00ff88; }}
+.mv-bet.red   .mv-bet-line {{ color: #ff2e88; }}
+.mv-bet.cyan  .mv-bet-line {{ color: #00f5ff; }}
+.mv-bet.yellow .mv-bet-line {{ color: #ffd600; }}
 .mv-over {{ padding: 8px 14px; }}
 .mv-over-hdr {{ font-size: 10px; font-weight: 900; color: #00f5ff;
     text-transform: uppercase; letter-spacing: 1px;
     text-align: center; padding-bottom: 4px;
-    border-bottom: 1px solid rgba(0,245,255,0.22);
-    margin-bottom: 8px; text-shadow: 0 0 12px rgba(0,245,255,0.7); }}
+    border-bottom: 1px solid rgba(0,245,255,0.22); margin-bottom: 8px; }}
 .mv-over-cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
     max-width: 540px; margin: 0 auto; }}
 .mv-over-team {{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }}
-.mv-over-pname {{ font-size: 15px; font-weight: 900;
-    text-align: center; letter-spacing: 0.4px;
+.mv-over-pname {{ font-size: 15px; font-weight: 900; text-align: center;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    padding-bottom: 6px; border-bottom: 1px dashed rgba(0,245,255,0.2);
-    text-shadow: 0 0 14px currentColor; }}
+    padding-bottom: 6px; border-bottom: 1px dashed rgba(0,245,255,0.2); }}
 .mv-over-exp {{ display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 4px;
     margin: 2px 0 6px 0; padding: 10px 12px 8px 12px; border-radius: 10px;
     background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
-    border: 1.5px solid rgba(0,245,255,0.5);
-    box-shadow: 0 0 20px rgba(0,245,255,0.28), inset 0 0 15px rgba(0,245,255,0.05);
-    position: relative; overflow: hidden; }}
-.mv-over-exp::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: linear-gradient(90deg, transparent, #00f5ff, #b537ff, #00f5ff, transparent);
-    opacity: 0.85; }}
+    border: 1.5px solid rgba(0,245,255,0.5); }}
 .mv-over-exp-lbl {{ font-size: 8.5px; color: #00f5ff;
-    font-weight: 900; text-transform: uppercase; letter-spacing: 1.4px;
-    text-shadow: 0 0 10px rgba(0,245,255,0.7); text-align: center; }}
+    font-weight: 900; text-transform: uppercase; letter-spacing: 1.4px; }}
 .mv-over-exp-main {{ font-family: 'JetBrains Mono', monospace;
-    font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1.5px;
-    text-shadow: 0 0 22px currentColor; text-align: center; margin: 1px 0; }}
+    font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1.5px; }}
 .mv-over-exp-samples {{ display: flex; align-items: center; justify-content: center;
     gap: 8px; width: 100%; margin-top: 3px; padding-top: 6px;
     border-top: 1px dashed rgba(0,245,255,0.2); }}
@@ -729,52 +562,38 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 .mv-over-exp-smp {{ font-size: 8.5px; font-weight: 900;
     letter-spacing: 0.4px; padding: 1px 6px; border-radius: 100px;
     flex-shrink: 0; white-space: nowrap; text-transform: uppercase; }}
-.mv-over-exp-smp.high {{ color: #00ff88; background: rgba(0,255,136,0.15);
-    border: 1px solid rgba(0,255,136,0.45); text-shadow: 0 0 6px rgba(0,255,136,0.7); }}
-.mv-over-exp-smp.medium {{ color: #ffd600; background: rgba(255,214,0,0.15);
-    border: 1px solid rgba(255,214,0,0.45); text-shadow: 0 0 6px rgba(255,214,0,0.7); }}
-.mv-over-exp-smp.low {{ color: #ff2e88; background: rgba(255,46,136,0.15);
-    border: 1px solid rgba(255,46,136,0.45); text-shadow: 0 0 6px rgba(255,46,136,0.7); }}
-.mv-over-exp-smp.none {{ color: #7a89a8; background: rgba(122,137,168,0.12);
-    border: 1px solid rgba(122,137,168,0.3); }}
+.mv-over-exp-smp.high {{ color: #00ff88;
+    background: rgba(0,255,136,0.15); border: 1px solid rgba(0,255,136,0.45); }}
+.mv-over-exp-smp.medium {{ color: #ffd600;
+    background: rgba(255,214,0,0.15); border: 1px solid rgba(255,214,0,0.45); }}
+.mv-over-exp-smp.low {{ color: #ff2e88;
+    background: rgba(255,46,136,0.15); border: 1px solid rgba(255,46,136,0.45); }}
+.mv-over-exp-smp.none {{ color: #7a89a8;
+    background: rgba(122,137,168,0.12); border: 1px solid rgba(122,137,168,0.3); }}
 .mv-over-exp-val-mini {{ font-family: 'JetBrains Mono', monospace;
-    font-weight: 900; font-size: 11.5px; letter-spacing: -0.3px;
-    text-shadow: 0 0 8px currentColor; }}
-.mv-over-exp-sep {{ color: rgba(0,245,255,0.35); font-weight: 900;
-    font-size: 12px; flex-shrink: 0; }}
-.mv-over-exp-trend {{ font-size: 13px; flex-shrink: 0;
-    filter: drop-shadow(0 0 6px currentColor); }}
+    font-weight: 900; font-size: 11.5px; }}
+.mv-over-exp-sep {{ color: rgba(0,245,255,0.35); font-weight: 900; font-size: 12px; }}
+.mv-over-exp-trend {{ font-size: 13px; flex-shrink: 0; }}
 .mv-over-stat {{ display: flex; justify-content: space-between;
-    align-items: center; gap: 10px; font-size: 12px; line-height: 1.5;
-    padding: 2px 0; }}
-.mv-over-lbl {{ font-size: 11px; color: #8b9bb8;
-    font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.4px; white-space: nowrap; }}
+    align-items: center; gap: 10px; font-size: 12px; padding: 2px 0; }}
+.mv-over-lbl {{ font-size: 11px; color: #8b9bb8; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }}
 .mv-over-pct {{ font-family: 'JetBrains Mono', monospace;
-    font-weight: 900; font-size: 15px;
-    text-shadow: 0 0 10px currentColor; flex-shrink: 0; }}
-
-.footer-v2 {{
-    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 900; font-size: 15px; flex-shrink: 0; }}
+.footer-v2 {{ display: flex; justify-content: space-between; align-items: center;
     padding: 14px 22px; margin-top: 22px;
     background: linear-gradient(135deg, rgba(5,8,20,0.92), rgba(10,15,30,0.92));
-    border-top: 1.5px solid rgba(0,245,255,0.35); border-radius: 10px;
-    box-shadow: 0 -10px 40px rgba(0,245,255,0.08);
-}}
+    border-top: 1.5px solid rgba(0,245,255,0.35); border-radius: 10px; }}
 .footer-v2-left {{ display: flex; align-items: center; gap: 10px;
     font-size: 13px; font-weight: 900; color: #f0f5ff;
     letter-spacing: 1.2px; text-transform: uppercase; }}
-.footer-v2-accent {{
-    background: linear-gradient(135deg, #00f5ff, #b537ff);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.7)); }}
+.footer-v2-accent {{ background: linear-gradient(135deg, #00f5ff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
 .footer-v2-right {{ display: flex; align-items: center; gap: 14px;
     font-size: 10.5px; font-weight: 800; color: #7a89a8;
     letter-spacing: 1.8px; text-transform: uppercase; }}
 .footer-v2-right .dot-sep {{ color: #00f5ff; font-size: 14px; }}
-
 .nav-v2 {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }}
-.nav-v2-6 {{ grid-template-columns: repeat(6, 1fr); }}
 .pill-actions {{ margin-bottom: 14px; margin-top: 0; }}
 </style>"""
     return base
@@ -802,12 +621,6 @@ def get_safe_over_line_ft(g):
     for m, l, lb in SAFE_LINE_TABLE:
         if g >= m: return l, lb
     return 'Sem Over', 'muito baixa'
-
-
-def is_over_25_ht_safe(g):
-    if g is None or g == '': return False
-    try: return float(g) >= HT_OVER_25_THRESHOLD
-    except: return False
 
 
 def parse_pct(v):
@@ -850,13 +663,6 @@ def pbar_color(pct):
     return '#ff4444'
 
 
-def team_color(name):
-    colors = ['#00f5ff', '#b537ff', '#00ff88', '#ffd600', '#ff8c00',
-              '#ff2e88', '#ec4899', '#3b82f6', '#14b8a6', '#f59e0b']
-    h = sum(ord(c) for c in str(name))
-    return colors[h % len(colors)]
-
-
 def team_initial(name):
     s = str(name).strip()
     if not s: return '?'
@@ -885,31 +691,7 @@ def render_hero_v2(title="E-SOCCER FIFA", accent="ANALYTICS",
                    right2_emoji="🧠",
                    tagline="5.000 SIMULAÇÕES POR JOGO. ZERO ACHISMO.",
                    logo="🤖", jersey="👕"):
-    svg_icon = (
-        '<svg viewBox="0 0 64 64" fill="none" stroke="url(#heroGrad)" '
-        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
-        '<defs><linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
-        '<stop offset="0%" stop-color="#00f5ff"/>'
-        '<stop offset="100%" stop-color="#b537ff"/>'
-        '</linearGradient></defs>'
-        '<path d="M32 10 C22 10 15 16 15 25 C10 26 8 30 8 34 '
-        'C8 37 9 39 11 41 C10 44 12 48 16 50 C19 53 24 53 28 51 '
-        'C30 53 34 53 36 51 C40 53 45 53 48 50 C52 48 54 44 53 41 '
-        'C55 39 56 37 56 34 C56 30 54 26 49 25 C49 16 42 10 32 10 Z"/>'
-        '<circle cx="24" cy="24" r="2.4" fill="#00f5ff" stroke="none"/>'
-        '<circle cx="40" cy="24" r="2.4" fill="#00f5ff" stroke="none"/>'
-        '<circle cx="32" cy="34" r="2.4" fill="#b537ff" stroke="none"/>'
-        '<circle cx="24" cy="43" r="2" fill="#b537ff" stroke="none"/>'
-        '<circle cx="40" cy="43" r="2" fill="#b537ff" stroke="none"/>'
-        '<path d="M24 26 L24 34 L32 34" stroke-width="1.8"/>'
-        '<path d="M40 26 L40 34 L32 34" stroke-width="1.8"/>'
-        '<path d="M24 34 L24 43" stroke-width="1.8"/>'
-        '<path d="M40 34 L40 43" stroke-width="1.8"/>'
-        '</svg>'
-    )
-    badge_content = (f'<span class="badge-emoji">{right2_emoji}</span>'
-                     if right2_emoji else svg_icon)
-
+    badge_content = f'<span class="badge-emoji">{right2_emoji}</span>'
     return (
         '<div class="hero-v2">'
         '<div class="hero-v2-left">'
@@ -981,7 +763,7 @@ def render_footer_v2():
 
 
 # ============================================
-# ANÁLISE
+# ANÁLISE ESTATÍSTICA
 # ============================================
 def build_league_counters(ad):
     cs = {}
@@ -1118,29 +900,21 @@ def compute_expected_goals(ldf, player_name, opponent_name):
 
     p5  = _recent(player_name, 5);   p10 = _recent(player_name, 10)
     o5  = _recent(opponent_name, 5); o10 = _recent(opponent_name, 10)
-
     if not p5 or not o5: return None
-
     exp5  = (p5['scored']  + o5['conceded'])  / 2
     exp10 = (p10['scored'] + o10['conceded']) / 2 if (p10 and o10) else exp5
-
     n5  = min(p5['n'],  o5['n'])
     n10 = min(p10['n'], o10['n']) if (p10 and o10) else n5
-
     delta = exp5 - exp10
     if delta >= 0.35:    trend, trend_icon, trend_color = 'up',        '📈', '#00ff88'
     elif delta >= 0.15:  trend, trend_icon, trend_color = 'up_lite',   '↗️', '#00ff88'
     elif delta <= -0.35: trend, trend_icon, trend_color = 'down',      '📉', '#ff2e88'
     elif delta <= -0.15: trend, trend_icon, trend_color = 'down_lite', '↘️', '#ff2e88'
     else:                trend, trend_icon, trend_color = 'stable',    '➖', '#7a89a8'
-
-    return {
-        'exp5': exp5, 'exp10': exp10,
-        'n5': n5, 'n10': n10,
-        'conf5': _conf(n5), 'conf10': _conf(n10),
-        'trend': trend, 'trend_icon': trend_icon, 'trend_color': trend_color,
-        'delta': delta,
-    }
+    return {'exp5': exp5, 'exp10': exp10, 'n5': n5, 'n10': n10,
+            'conf5': _conf(n5), 'conf10': _conf(n10),
+            'trend': trend, 'trend_icon': trend_icon, 'trend_color': trend_color,
+            'delta': delta}
 
 
 def compute_h2h_details(ldf, pa_n, pb_n):
@@ -1282,221 +1056,6 @@ def compute_1x2_probs(ldf, casa, fora):
     return (p_home, p_draw, p_away)
 
 
-def generate_pdf(df, title="E-Soccer — Jogos do Dia"):
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=0.4 * cm, rightMargin=0.4 * cm,
-                            topMargin=0.8 * cm, bottomMargin=0.6 * cm)
-    els = []
-    styles = getSampleStyleSheet()
-    ts = ParagraphStyle('T', parent=styles['Title'], fontSize=14, spaceAfter=4)
-    ss = ParagraphStyle('S', parent=styles['Normal'], fontSize=8, textColor=rl_colors.grey)
-    els.append(Paragraph(title, ts))
-    els.append(Paragraph(f"FIFAlgorithm │ {datetime.now().strftime('%d/%m/%Y %H:%M')} │ {len(df)} jogos", ss))
-    els.append(Spacer(1, 6))
-    header = [str(c) for c in df.columns]
-    data = [header]
-    for _, r in df.iterrows():
-        data.append([str(v) if v is not None else '' for v in r.values])
-    nc = len(df.columns)
-    avail = 28.5 * cm
-    cw = [avail / nc] * nc
-    table = Table(data, colWidths=cw, repeatRows=1)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 6), ('FONTSIZE', (0, 1), (-1, -1), 5.5),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor('#f8f9fa')])]))
-    els.append(table)
-    doc.build(els)
-    return buf.getvalue()
-
-
-def generate_tips_pdf(df_f, ad, ld):
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=0.5 * cm, rightMargin=0.5 * cm,
-                            topMargin=0.8 * cm, bottomMargin=0.8 * cm)
-    els = []
-    styles = getSampleStyleSheet()
-
-    C_BG_ROW = rl_colors.HexColor('#0a0f1e')
-    C_BG_ALT = rl_colors.HexColor('#0d1224')
-    C_BORDER = rl_colors.HexColor('#1a2540')
-    C_CYAN = rl_colors.HexColor('#00f5ff')
-    C_DIM = rl_colors.HexColor('#7a89a8')
-    C_WHITE = rl_colors.HexColor('#f0f5ff')
-
-    def mkstyle(size=8, color=C_WHITE, bold=False, align=TA_CENTER, leading=None):
-        return ParagraphStyle(
-            'p', fontSize=size, textColor=color,
-            fontName='Helvetica-Bold' if bold else 'Helvetica',
-            alignment=align, leading=leading or (size + 3))
-
-    def cor_pct(p):
-        if p >= 60: return '#00ff88'
-        if p >= 40: return '#ffd600'
-        return '#ff8c00'
-
-    def cor_ppj(p):
-        if p >= 2.5: return '#00ff88'
-        if p >= 2.0: return '#00f5ff'
-        if p >= 1.5: return '#ffd600'
-        if p >= 1.0: return '#ff8c00'
-        return '#ff2e88'
-
-    def form_html(form):
-        colors = {'V': '#00ff88', 'E': '#ffd600', 'D': '#ff2e88'}
-        out = ''
-        for f in form[:10]:
-            c = colors.get(f, '#7a89a8')
-            out += f'<font color="{c}"><b>●</b></font> '
-        return out.strip()
-
-    title_s = mkstyle(18, C_CYAN, True, TA_CENTER, 22)
-    sub_s = mkstyle(9, C_DIM, False, TA_CENTER)
-    els.append(Paragraph("E-Soccer Fifa Analytics — Dicas do Dia", title_s))
-    els.append(Paragraph(f"FIFAlgorithm  |  {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  {len(df_f)} jogos", sub_s))
-    els.append(Spacer(1, 10))
-
-    header_data = [[
-        Paragraph('<b>HORA / LIGA</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>CONFRONTO</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>MÉDIA</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>HT</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>FT</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>📊 LEITURA DOS PERFIS</b>', mkstyle(8.5, C_CYAN, True)),
-        Paragraph('<b>⭐ OVER PLAYERS</b>', mkstyle(8.5, C_CYAN, True)),
-    ]]
-
-    rows_data = []
-    style_cmds = [
-        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#101a30')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), C_CYAN),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, 0), 8),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
-        ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 1), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, C_BORDER),
-        ('BOX', (0, 0), (-1, -1), 1, C_CYAN),
-    ]
-
-    for i, (_, row) in enumerate(df_f.iterrows(), start=1):
-        casa_raw = str(row.get('casa', '')); fora_raw = str(row.get('fora', ''))
-        hora = str(row.get('hora', '--:--'))
-        liga = str(row.get('competicao', '')).upper().replace('E-SOCCER - ', '').replace(' - ', ' ')
-        gols_ft = row.get('Gols FT', 0); gols_ht = row.get('Gols HT', 0)
-        try: gols_ft = float(gols_ft)
-        except: gols_ft = 0.0
-        try: gols_ht = float(gols_ht)
-        except: gols_ht = 0.0
-        rec_ht = row.get('Rec HT', 'Evitar HT')
-        prob_rec_ht = row.get('Prob Rec HT', '-')
-        linha_seg = row.get('Linha Seg FT', '') or '—'
-        linha_atende = linha_seg not in ('—', 'Sem Over', '')
-        ap_top = linha_seg if linha_atende else 'Sem linha'
-        if 'Over 2.5' in rec_ht: ht_c = '#00ff88'
-        elif 'Over 1.5' in rec_ht: ht_c = '#ffd600'
-        elif 'Over 0.5' in rec_ht: ht_c = '#ff8c00'
-        else: ht_c = '#ff2e88'
-        ft_c = '#00f5ff' if linha_atende else '#ff2e88'
-
-        lk = find_league_key(row.get('competicao', ''), ld)
-        ldf = ad.get(lk) if lk and lk in ad else None
-        pa = analyze_player_deep_profile(ldf, casa_raw) if ldf is not None else None
-        pb = analyze_player_deep_profile(ldf, fora_raw) if ldf is not None else None
-        ou_a = compute_team_over_under(ldf, casa_raw.lower()) if ldf is not None else {}
-        ou_b = compute_team_over_under(ldf, fora_raw.lower()) if ldf is not None else {}
-        p_a_15 = ou_a.get('1.5', 0) * 100; p_a_25 = ou_a.get('2.5', 0) * 100
-        p_b_15 = ou_b.get('1.5', 0) * 100; p_b_25 = ou_b.get('2.5', 0) * 100
-
-        cell1 = Paragraph(
-            f'<font color="#f0f5ff" size="11"><b>{hora}</b></font><br/>'
-            f'<font color="#00f5ff" size="7"><b>{liga[:20]}</b></font>',
-            mkstyle(8, C_WHITE, align=TA_CENTER))
-        cell2 = Paragraph(
-            f'<font color="#f0f5ff" size="10"><b>{casa_raw[:14]}</b></font><br/>'
-            f'<font color="#7a89a8" size="7">vs</font><br/>'
-            f'<font color="#f0f5ff" size="10"><b>{fora_raw[:14]}</b></font>',
-            mkstyle(8, C_WHITE, align=TA_CENTER))
-        cell3 = Paragraph(
-            f'<font color="#c77dff" size="9"><b>HT {gols_ht:.2f}</b></font><br/>'
-            f'<font color="#00f5ff" size="9"><b>FT {gols_ft:.2f}</b></font>',
-            mkstyle(8, C_WHITE, align=TA_CENTER))
-        cell4 = Paragraph(
-            f'<font color="{ht_c}" size="12"><b>{prob_rec_ht}</b></font><br/>'
-            f'<font color="{ht_c}" size="7.5"><b>{rec_ht.upper()}</b></font>',
-            mkstyle(8, C_WHITE, align=TA_CENTER))
-        cell5 = Paragraph(
-            f'<font color="{ft_c}" size="11"><b>{ap_top}</b></font>',
-            mkstyle(8, C_WHITE, align=TA_CENTER))
-
-        perfis_html = ''
-        if pa:
-            ppj_a = pa.get('ppj_5', 0); pc_a = cor_ppj(ppj_a)
-            form_a = form_html(pa.get('form', []))
-            arch_a = pa.get('arch_name', '—'); trend_a = pa.get('trend_icon', '➖')
-            perfis_html += (f'<font color="#00f5ff" size="8"><b>{casa_raw[:12]}</b></font>  '
-                            f'<font color="{pc_a}" size="10"><b>{ppj_a:.2f}</b></font> '
-                            f'<font color="#f0f5ff" size="8">{trend_a}</font>  '
-                            f'<font color="#7a89a8" size="7">{arch_a}</font><br/>'
-                            f'<font size="9">{form_a}</font><br/>')
-        else:
-            perfis_html += f'<font color="#7a89a8" size="7">{casa_raw[:12]}: sem dados</font><br/>'
-        if pb:
-            ppj_b = pb.get('ppj_5', 0); pc_b = cor_ppj(ppj_b)
-            form_b = form_html(pb.get('form', []))
-            arch_b = pb.get('arch_name', '—'); trend_b = pb.get('trend_icon', '➖')
-            perfis_html += (f'<font color="#b537ff" size="8"><b>{fora_raw[:12]}</b></font>  '
-                            f'<font color="{pc_b}" size="10"><b>{ppj_b:.2f}</b></font> '
-                            f'<font color="#f0f5ff" size="8">{trend_b}</font>  '
-                            f'<font color="#7a89a8" size="7">{arch_b}</font><br/>'
-                            f'<font size="9">{form_b}</font>')
-        else:
-            perfis_html += f'<font color="#7a89a8" size="7">{fora_raw[:12]}: sem dados</font>'
-        cell6 = Paragraph(perfis_html, mkstyle(7, C_WHITE, align=TA_LEFT, leading=11))
-
-        op_html = (f'<font color="#00ff88" size="8"><b>{casa_raw[:11]}</b></font><br/>'
-                   f'<font color="#7a89a8" size="7">1.5</font> '
-                   f'<font color="{cor_pct(p_a_15)}" size="9"><b>{p_a_15:.0f}%</b></font>   '
-                   f'<font color="#7a89a8" size="7">2.5</font> '
-                   f'<font color="{cor_pct(p_a_25)}" size="9"><b>{p_a_25:.0f}%</b></font><br/>'
-                   f'<font color="#00f5ff" size="8"><b>{fora_raw[:11]}</b></font><br/>'
-                   f'<font color="#7a89a8" size="7">1.5</font> '
-                   f'<font color="{cor_pct(p_b_15)}" size="9"><b>{p_b_15:.0f}%</b></font>   '
-                   f'<font color="#7a89a8" size="7">2.5</font> '
-                   f'<font color="{cor_pct(p_b_25)}" size="9"><b>{p_b_25:.0f}%</b></font>')
-        cell7 = Paragraph(op_html, mkstyle(7, C_WHITE, align=TA_LEFT, leading=11))
-
-        rows_data.append([cell1, cell2, cell3, cell4, cell5, cell6, cell7])
-        bg_color = C_BG_ROW if i % 2 == 1 else C_BG_ALT
-        style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg_color))
-
-    all_data = header_data + rows_data
-    col_widths = [1.9 * cm, 3.0 * cm, 2.2 * cm, 2.0 * cm, 2.0 * cm, 8.8 * cm, 8.8 * cm]
-    tbl = Table(all_data, colWidths=col_widths, repeatRows=1)
-    tbl.setStyle(TableStyle(style_cmds))
-    els.append(tbl)
-
-    els.append(Spacer(1, 10))
-    foot_s = mkstyle(7, C_DIM, False, TA_CENTER)
-    els.append(Paragraph(
-        "E-Soccer Fifa Analytics  |  @FIFAlgorithm  |  "
-        f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", foot_s))
-    doc.build(els)
-    return buf.getvalue()
-
-
 def monte_carlo(df, ad, ld, ns=N_SIMULATIONS, seed=42):
     rng = np.random.default_rng(seed)
     out = {c: [] for c in EXTRA_COLUMNS}
@@ -1560,30 +1119,24 @@ def monte_carlo(df, ad, ld, ns=N_SIMULATIONS, seed=42):
     return out
 
 
-# ============================================
-# MONTE CARLO — VERSÃO COM CACHE
-# ============================================
 @st.cache_data(ttl=300, show_spinner=False, max_entries=8)
 def monte_carlo_cached(df: pd.DataFrame, ad: dict, ns: int = N_SIMULATIONS, seed: int = 42):
     return monte_carlo(df, ad, LEAGUES, ns=ns, seed=seed)
 
 
 # ============================================
-# SCRAPERS
+# SCRAPER COM PLAYWRIGHT (passa Cloudflare)
 # ============================================
 class EFootballScraper:
     def __init__(self):
         self.base_url = "https://24live.com/api"
-        self._playwright_ok = None  # detecta na primeira chamada
 
     def _fetch_via_playwright(self, url: str, params: dict, timeout: int = 30):
-        """Busca via Chromium real (passa pelo Cloudflare)"""
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
             return None
 
-        # Monta URL com query string
         import urllib.parse
         full_url = f"{url}?{urllib.parse.urlencode(params)}"
 
@@ -1591,13 +1144,8 @@ class EFootballScraper:
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=True,
-                    args=[
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-gpu',
-                        '--single-process',
-                    ]
+                    args=['--no-sandbox', '--disable-setuid-sandbox',
+                          '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
                 )
                 context = browser.new_context(
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -1607,32 +1155,23 @@ class EFootballScraper:
                     viewport={'width': 1920, 'height': 1080},
                 )
                 page = context.new_page()
-
-                # Vai primeiro na home pra pegar cookies do Cloudflare
                 page.goto('https://24live.com/pt/', wait_until='domcontentloaded', timeout=timeout * 1000)
                 page.wait_for_timeout(3000)
-
-                # Agora faz a chamada da API
-                response = page.goto(full_url, wait_until='domcontentloaded', timeout=timeout * 1000)
+                page.goto(full_url, wait_until='domcontentloaded', timeout=timeout * 1000)
                 page.wait_for_timeout(1500)
-
                 text = page.content()
                 browser.close()
 
-                # Tenta extrair o JSON do body (pode vir dentro de <pre>)
                 from bs4 import BeautifulSoup as _BS
                 soup = _BS(text, 'html.parser')
                 body = soup.find('pre') or soup.find('body')
                 raw = body.get_text() if body else text
-
-                import json as _json
                 try:
-                    return _json.loads(raw)
+                    return json.loads(raw)
                 except Exception:
-                    # tenta achar o JSON dentro do HTML
                     m = re.search(r'(\[.*\]|\{.*\})', raw, re.DOTALL)
                     if m:
-                        try: return _json.loads(m.group(1))
+                        try: return json.loads(m.group(1))
                         except: pass
                     return None
         except Exception as e:
@@ -1652,14 +1191,13 @@ class EFootballScraper:
             'defaultSubtournamentLimit': 1000, 'orderBy': 'desc'
         }
 
-        # ---- Tentativa 1: cloudscraper (rápido) ----
+        # Tentativa 1: cloudscraper
         try:
             import cloudscraper
             sess = cloudscraper.create_scraper(
                 browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})
             sess.headers.update({
                 'Accept': 'application/json, text/plain, */*',
-                'Accept-Language': 'pt-BR,pt;q=0.9',
                 'Referer': 'https://24live.com/pt/',
                 'Origin': 'https://24live.com',
             })
@@ -1669,14 +1207,12 @@ class EFootballScraper:
         except Exception:
             pass
 
-        # ---- Tentativa 2: Playwright (Chromium real) ----
+        # Tentativa 2: Playwright
         result = self._fetch_via_playwright(url, params, timeout=timeout)
         if result is not None:
             return result
 
-        # ---- Falhou tudo ----
-        if '_fetch_errors' not in st.session_state: st.session_state['_fetch_errors'] = []
-        st.session_state['_fetch_errors'].append(f"{sid}: Todas as tentativas falharam (403)")
+        st.session_state['_fetch_errors'].append(f"{sid}: Todas as tentativas falharam")
         return []
 
     def extract(self, data):
@@ -1731,6 +1267,7 @@ class EFootballScraper:
                            'today_str': today, 'sample_dates': sm}
         return out
 
+
 def test_24live_connectivity():
     try:
         import cloudscraper
@@ -1742,8 +1279,6 @@ def test_24live_connectivity():
             'to': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
         }, headers={'Accept': 'application/json', 'Referer': 'https://24live.com/pt/'})
         return r.status_code == 200, f"HTTP {r.status_code} · {len(r.text)} bytes"
-    except requests.exceptions.ReadTimeout:
-        return False, "Timeout — site lento ou bloqueando"
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
 
@@ -1769,9 +1304,7 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt); continue
             else:
-                if 'aceodds_games' in st.session_state and st.session_state['aceodds_games']:
-                    return st.session_state['aceodds_games']
-                return []
+                return st.session_state.get('aceodds_games', [])
         except Exception:
             return st.session_state.get('aceodds_games', [])
     if r is None: return st.session_state.get('aceodds_games', [])
@@ -1803,8 +1336,7 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
             casa = re.sub(r'^(Ao Vivo Agora|Ao Vivo|Agendado)\s*', '', casa, flags=re.IGNORECASE).strip()
             fora = re.sub(r'^(Ao Vivo Agora|Ao Vivo|Agendado)\s*', '', fora, flags=re.IGNORECASE).strip()
             if casa and ' x ' in casa and not fora:
-                p = casa.split(' x ', 1)
-                casa = p[0].strip(); fora = p[1].strip()
+                p = casa.split(' x ', 1); casa = p[0].strip(); fora = p[1].strip()
             su = (status + ' ' + rt).upper()
             is_live = 'AO VIVO' in su or 'LIVE' in su
             ca = extract_alias(casa); fa = extract_alias(fora)
@@ -1814,7 +1346,7 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
                               'competicao': comp, 'status': status, 'is_live': is_live})
         return jogos
     except Exception as e:
-        st.error(f"Erro ao processar AceOdds: {e}")
+        st.error(f"Erro AceOdds: {e}")
         return st.session_state.get('aceodds_games', [])
 
 
@@ -1873,7 +1405,7 @@ def render_progress_row(label, pct):
     return f'''<div class="prog-row">
         <div class="prog-lbl">{label}</div>
         <div class="prog-val" style="color:{color};">{pct * 100:.1f}%</div>
-        <div class="pbar"><div style="width:{min(pct * 100, 100)}%; background:{color}; box-shadow:0 0 10px {color};"></div></div>
+        <div class="pbar"><div style="width:{min(pct * 100, 100)}%; background:{color};"></div></div>
     </div>'''
 
 
@@ -1918,11 +1450,9 @@ def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_
 
     ou_a = compute_team_over_under(ldf, casa_raw.lower()) if ldf is not None else {}
     ou_b = compute_team_over_under(ldf, fora_raw.lower()) if ldf is not None else {}
-    p_a_15 = ou_a.get('1.5', 0) * 100
-    p_a_25 = ou_a.get('2.5', 0) * 100
+    p_a_15 = ou_a.get('1.5', 0) * 100; p_a_25 = ou_a.get('2.5', 0) * 100
     p_a_35 = ou_a.get('3.5', 0) * 100
-    p_b_15 = ou_b.get('1.5', 0) * 100
-    p_b_25 = ou_b.get('2.5', 0) * 100
+    p_b_15 = ou_b.get('1.5', 0) * 100; p_b_25 = ou_b.get('2.5', 0) * 100
     p_b_35 = ou_b.get('3.5', 0) * 100
 
     exp_a = compute_expected_goals(ldf, casa_raw, fora_raw) if ldf is not None else None
@@ -1941,12 +1471,10 @@ def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_
 
     def exp_html_block(exp_data):
         if not exp_data:
-            return (
-                '<div class="mv-over-exp">'
-                '<span class="mv-over-exp-lbl">Gols Esperados</span>'
-                '<span class="mv-over-exp-main" style="color:#7a89a8;">—</span>'
-                '</div>'
-            )
+            return ('<div class="mv-over-exp">'
+                    '<span class="mv-over-exp-lbl">Gols Esperados</span>'
+                    '<span class="mv-over-exp-main" style="color:#7a89a8;">—</span>'
+                    '</div>')
         e5, e10 = exp_data['exp5'], exp_data['exp10']
         c5, c10 = c_exp(e5), c_exp(e10)
         main_color = c_exp(e5)
@@ -1958,16 +1486,13 @@ def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_
             '<span class="mv-over-exp-group">'
             f'<span class="mv-over-exp-smp {exp_data["conf5"]}">{exp_data["n5"]} JG</span>'
             f'<span class="mv-over-exp-val-mini" style="color:{c5};">{e5:.2f}</span>'
-            '</span>'
-            '<span class="mv-over-exp-sep">│</span>'
+            '</span><span class="mv-over-exp-sep">│</span>'
             '<span class="mv-over-exp-group">'
             f'<span class="mv-over-exp-smp {exp_data["conf10"]}">{exp_data["n10"]} JG</span>'
             f'<span class="mv-over-exp-val-mini" style="color:{c10};">{e10:.2f}</span>'
             '</span>'
             f'<span class="mv-over-exp-trend" style="color:{exp_data["trend_color"]};">'
-            f'{exp_data["trend_icon"]}</span>'
-            '</div>'
-            '</div>'
+            f'{exp_data["trend_icon"]}</span></div></div>'
         )
 
     a_ini = team_initial(casa_raw); b_ini = team_initial(fora_raw)
@@ -1976,18 +1501,12 @@ def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_
         return f'''<div class="mv-over-team">
             <div class="mv-over-pname" style="color:{color};">{name[:16]}</div>
             {exp_html_block(exp_data)}
-            <div class="mv-over-stat">
-                <span class="mv-over-lbl">Marcar 1.5</span>
-                <span class="mv-over-pct" style="color:{c_pct(p15)};">{p15:.0f}%</span>
-            </div>
-            <div class="mv-over-stat">
-                <span class="mv-over-lbl">Marcar 2.5</span>
-                <span class="mv-over-pct" style="color:{c_pct(p25)};">{p25:.0f}%</span>
-            </div>
-            <div class="mv-over-stat">
-                <span class="mv-over-lbl">Marcar 3.5</span>
-                <span class="mv-over-pct" style="color:{c_pct(p35)};">{p35:.0f}%</span>
-            </div>
+            <div class="mv-over-stat"><span class="mv-over-lbl">Marcar 1.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p15)};">{p15:.0f}%</span></div>
+            <div class="mv-over-stat"><span class="mv-over-lbl">Marcar 2.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p25)};">{p25:.0f}%</span></div>
+            <div class="mv-over-stat"><span class="mv-over-lbl">Marcar 3.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p35)};">{p35:.0f}%</span></div>
         </div>'''
 
     return (
@@ -2001,32 +1520,26 @@ def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_
         f'<div class="mv-team right"><span class="mv-team-name">{fora_raw[:18]}</span>'
         f'<div class="mv-crest away">{b_ini}</div></div>'
         '</div>'
-        f'<div class="mv-box mv-media">'
-        f'<div class="mv-media-vals">'
+        f'<div class="mv-box mv-media"><div class="mv-media-vals">'
         f'<span class="ht">HT {gols_ht:.2f}</span>'
-        f'<span class="ft">FT {gols_ft:.2f}</span>'
-        f'</div></div>'
+        f'<span class="ft">FT {gols_ft:.2f}</span></div></div>'
         f'<div class="mv-box mv-bet {ht_cls}">'
         f'<div class="mv-bet-val">{ht_lbl}</div>'
-        f'<div class="mv-bet-line">{ht_line}</div>'
-        f'</div>'
+        f'<div class="mv-bet-line">{ht_line}</div></div>'
         f'<div class="mv-box mv-bet {ft_cls}">'
-        f'<div class="mv-bet-val">{ft_lbl}</div>'
-        f'</div>'
+        f'<div class="mv-bet-val">{ft_lbl}</div></div>'
         f'<div class="mv-box mv-over">'
         f'<div class="mv-over-hdr">⭐ OVER INDIVIDUAL</div>'
         f'<div class="mv-over-cols">'
         f'{over_team_block(casa_raw, p_a_15, p_a_25, p_a_35, "#00ff88", exp_a)}'
         f'{over_team_block(fora_raw, p_b_15, p_b_25, p_b_35, "#00f5ff", exp_b)}'
-        f'</div>'
-        f'</div>'
-        '</div>'
+        f'</div></div></div>'
     )
 
 
 def render_h2h_comparison(casa_raw, fora_raw, ldf, hora='--:--', liga=''):
     if ldf is None or ldf.empty:
-        return '<p style="color:#7a89a8; padding:12px;">Sem dados H2H disponíveis.</p>'
+        return '<p style="color:#7a89a8; padding:12px;">Sem dados H2H.</p>'
 
     def get_last_10(team_name):
         tl = team_name.strip().lower()
@@ -2072,13 +1585,13 @@ def render_h2h_comparison(casa_raw, fora_raw, ldf, hora='--:--', liga=''):
     def form_dots(f):
         html = ''
         for x in f:
-            if x == 'V': bg, fc, sh = '#00ff88', '#05070f', 'rgba(0,255,136,0.7)'
-            elif x == 'E': bg, fc, sh = '#ffd600', '#05070f', 'rgba(255,214,0,0.7)'
-            else: bg, fc, sh = '#ff2e88', '#ffffff', 'rgba(255,46,136,0.7)'
+            if x == 'V': bg, fc = '#00ff88', '#05070f'
+            elif x == 'E': bg, fc = '#ffd600', '#05070f'
+            else: bg, fc = '#ff2e88', '#ffffff'
             html += (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
                      f'width:20px;height:20px;border-radius:50%;background:{bg};color:{fc};'
                      f'font-size:10px;font-weight:900;font-family:\'JetBrains Mono\',monospace;'
-                     f'margin:0 2px;box-shadow:0 0 10px {sh};line-height:1;flex-shrink:0;">{x}</span>')
+                     f'margin:0 2px;line-height:1;flex-shrink:0;">{x}</span>')
         return html
 
     def seq(items, mode='goals'):
@@ -2111,12 +1624,7 @@ def render_h2h_comparison(casa_raw, fora_raw, ldf, hora='--:--', liga=''):
             </div>
             <div class="h2h-match-info">
                 <div class="vs">VS</div>
-                <div class="league">{hora} · ÚLTIMOS 10 JOGOS</div>
-                <div class="h2h-ppj-matchup">
-                    <span class="val" style="color:{ppj_color(sa['ppj'])};">{sa['ppj']:.2f}</span>
-                    <span class="sep">×</span>
-                    <span class="val" style="color:{ppj_color(sb['ppj'])};">{sb['ppj']:.2f}</span>
-                </div>
+                <div class="league">{hora} · ÚLTIMOS 10</div>
             </div>
             <div class="h2h-team right">
                 <div class="h2h-team-name">{fora_raw} 🛡️</div>
@@ -2164,7 +1672,7 @@ def render_match_card(row, ad, ld, idx=0):
         st.info("Sem dados da liga."); return
     ldf = ad[lk]
 
-    st.markdown('<div class="section-label">📊 OVER/UNDER PARTIDA (HT → FT)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">📊 OVER/UNDER PARTIDA</div>', unsafe_allow_html=True)
     ou_parts = []
     for line in ['0.5', '1.5', '2.5']:
         col = f'Over {line} HT'
@@ -2181,7 +1689,7 @@ def render_match_card(row, ad, ld, idx=0):
     if ou_parts:
         st.markdown(f'<div style="background: rgba(0,0,0,0.4); padding: 10px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">{"".join(ou_parts)}</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-label">🎯 OVER INDIVIDUAL (gols do time)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">🎯 OVER INDIVIDUAL</div>', unsafe_allow_html=True)
     ou_a = compute_team_over_under(ldf, casa); ou_b = compute_team_over_under(ldf, fora)
     c1, c2 = st.columns(2)
     for col, team_name, ou_data, cor in [(c1, casa_raw, ou_a, '#00ff88'), (c2, fora_raw, ou_b, '#00f5ff')]:
@@ -2193,44 +1701,12 @@ def render_match_card(row, ad, ld, idx=0):
             for line, pct in ou_data.items():
                 rows_html += render_progress_row(line, pct)
             st.markdown(f'''<div style="background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
-                <div style="font-size:13px; font-weight:800; color:{cor}; margin-bottom:8px; text-shadow: 0 0 10px {cor};">{team_name[:20]}</div>
+                <div style="font-size:13px; font-weight:800; color:{cor}; margin-bottom:8px;">{team_name[:20]}</div>
                 {rows_html}</div>''', unsafe_allow_html=True)
-
-    st.markdown('<div class="section-label">📈 MÉDIAS & BTTS</div>', unsafe_allow_html=True)
-    med_ft = row.get('Gols FT', '-'); med_ht = row.get('Gols HT', '-')
-    btts_ft = row.get('BTTS FT', '-'); btts_ht = row.get('BTTS HT', '-')
-    try: med_ft_f = f"{float(med_ft):.2f}"
-    except: med_ft_f = str(med_ft)
-    try: med_ht_f = f"{float(med_ht):.2f}"
-    except: med_ht_f = str(med_ht)
-    st.markdown(f"""<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
-            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Média de Gols</div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0; border-bottom:1px solid rgba(0,245,255,0.06);">
-                <span style="color:#f0f5ff; font-weight:600;">HT</span>
-                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(181,55,255,0.5);">{med_ht_f}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;">
-                <span style="color:#f0f5ff; font-weight:600;">FT</span>
-                <span style="color:#00f5ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(0,245,255,0.5);">{med_ft_f}</span>
-            </div>
-        </div>
-        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
-            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Ambas Marcam</div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0; border-bottom:1px solid rgba(0,245,255,0.06);">
-                <span style="color:#f0f5ff; font-weight:600;">BTTS HT</span>
-                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(181,55,255,0.5);">{btts_ht}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;">
-                <span style="color:#f0f5ff; font-weight:600;">BTTS FT</span>
-                <span style="color:#00ff88; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(0,255,136,0.5);">{btts_ft}</span>
-            </div>
-        </div>
-    </div>""", unsafe_allow_html=True)
 
 
 # ============================================
-# INSIGHTS PLAYERS — ENGINE
+# INSIGHTS PLAYERS
 # ============================================
 def _compute_window_stats(last_n, tl):
     if last_n.empty: return None
@@ -2259,29 +1735,13 @@ def _compute_window_stats(last_n, tl):
     n_ht = len(ht_goals)
     avg_ft = sum(ft_goals) / nf if nf else 0
     avg_ht = sum(ht_goals) / n_ht if n_ht else 0
-    avg_2ht = (avg_ft - avg_ht) if avg_ft and avg_ht else 0
     variance = sum((x - avg_ft) ** 2 for x in ft_goals) / nf if nf > 0 else 0
-    std_dev = math.sqrt(variance)
     return {'n': nf, 'avg_for': sum(goals_for) / nf if nf else 0,
             'avg_against': sum(goals_against) / nf if nf else 0,
-            'avg_ft': avg_ft, 'avg_ht': avg_ht, 'avg_2ht': avg_2ht,
+            'avg_ft': avg_ft, 'avg_ht': avg_ht,
             'over25_pct': over25 / nf if nf else 0, 'btts_pct': btts / nf if nf else 0,
-            'over15ht_pct': o15ht / n_ht if n_ht else 0, 'over25ht_pct': o25ht / n_ht if n_ht else 0,
-            'form': form, 'std_dev': std_dev, 'ft_goals': ft_goals,
+            'form': form, 'std_dev': math.sqrt(variance), 'ft_goals': ft_goals,
             'points': points, 'ppj': points / nf if nf else 0}
-
-
-def get_archetype_tag(p):
-    w15 = p['w15']
-    avg_for = w15['avg_for']; avg_against = w15['avg_against']
-    avg_ft = w15['avg_ft']; ht_avg = w15['avg_ht']; over25 = w15['over25_pct']
-    if avg_for >= 2.5 and avg_against >= 2.5: return "⚡", "OFENSIVO", "Máquina de Gols + Defesa Frágil"
-    elif avg_for >= 2.5 and avg_against <= 1.5: return "🛡️", "DEFENSIVO", "Ataque Eficiente + Defesa Sólida"
-    elif avg_for <= 1.0 and avg_against <= 1.0: return "🧱", "RETRANQUEIRO", "Jogo Cauteloso + Defesa Sólida"
-    elif avg_for <= 1.0 and avg_against >= 2.5: return "📉", "FRÁGIL", "Ataque Cauteloso + Defesa Vulnerável"
-    elif avg_ft >= 4.5 or over25 >= 0.7: return "🎯", "OVER PLAYER", "Média Alta (Over 2.5 > 70%)"
-    elif ht_avg >= 1.5: return "🔥", "HT QUENTE", "Marcador movimenta no 1º Tempo"
-    else: return "⚖️", "EQUILIBRADO", "Média Equilibrada de Gols"
 
 
 def analyze_player_deep_profile(ldf, player_name):
@@ -2296,28 +1756,14 @@ def analyze_player_deep_profile(ldf, player_name):
     w15 = _compute_window_stats(games.head(15), tl)
     if not w5 or not w15: return None
     ppj_5 = w5['ppj']; ppj_15 = w15['ppj']; ppj_delta = ppj_5 - ppj_15
-    if ppj_delta >= 0.5: trend, trend_icon, trend_lbl = 'up', '📈', 'SUBINDO'
-    elif ppj_delta >= 0.2: trend, trend_icon, trend_lbl = 'slight_up', '↗️', 'LEVE ALTA'
-    elif ppj_delta <= -0.5: trend, trend_icon, trend_lbl = 'down', '📉', 'CAINDO'
-    elif ppj_delta <= -0.2: trend, trend_icon, trend_lbl = 'slight_down', '↘️', 'LEVE QUEDA'
-    else: trend, trend_icon, trend_lbl = 'stable', '➖', 'ESTÁVEL'
-    trend_delta = 0.0
-    if w15['avg_ft'] > 0: trend_delta = (w5['avg_ft'] - w15['avg_ft']) / w15['avg_ft']
-    consistency = 'consistent' if w15['std_dev'] <= 2.0 else ('volatile' if w15['std_dev'] >= 3.0 else 'moderate')
-    dna = []
-    if w15['avg_for'] >= 2.5: dna.append('OFENSIVO')
-    elif w15['avg_for'] <= 1.0: dna.append('CAUTELOSO')
-    else: dna.append('EQUILIBRADO')
-    if w15['avg_against'] >= 2.5: dna.append('DEFESA FRÁGIL')
-    elif w15['avg_against'] <= 1.0: dna.append('DEFESA SÓLIDA')
-    if w15['avg_ht'] >= 1.5: dna.append('HT QUENTE')
-    elif w15['avg_ht'] <= 0.7: dna.append('HT FRIO')
-    arch_icon, arch_name, arch_desc = get_archetype_tag({'w15': w15})
+    if ppj_delta >= 0.5: trend, trend_icon = 'up', '📈'
+    elif ppj_delta >= 0.2: trend, trend_icon = 'slight_up', '↗️'
+    elif ppj_delta <= -0.5: trend, trend_icon = 'down', '📉'
+    elif ppj_delta <= -0.2: trend, trend_icon = 'slight_down', '↘️'
+    else: trend, trend_icon = 'stable', '➖'
     return {'w5': w5, 'w15': w15, 'trend': trend, 'trend_icon': trend_icon,
-            'trend_lbl': trend_lbl, 'trend_delta': trend_delta,
             'ppj_5': ppj_5, 'ppj_15': ppj_15, 'ppj_delta': ppj_delta,
-            'consistency': consistency, 'dna': dna, 'form': w5['form'],
-            'arch_icon': arch_icon, 'arch_name': arch_name, 'arch_desc': arch_desc}
+            'form': w5['form']}
 
 
 def compute_player_ranking_stats(ldf, player_name):
@@ -2397,64 +1843,102 @@ def generate_insights_players_pdf(ranking, liga):
     sub_s = ParagraphStyle('S', parent=styles['Normal'], fontSize=9,
                            textColor=rl_colors.HexColor('#666666'),
                            alignment=TA_CENTER, spaceAfter=10)
-    sec_s = ParagraphStyle('SEC', parent=styles['Normal'], fontSize=11,
-                           textColor=rl_colors.HexColor('#0099cc'),
-                           spaceBefore=8, spaceAfter=4, fontName='Helvetica-Bold')
     foot_s = ParagraphStyle('F', parent=styles['Normal'], fontSize=7,
                             textColor=rl_colors.HexColor('#999999'), alignment=TA_CENTER)
     els.append(Paragraph("Insights Players — Ranking (Últimos 10 Jogos)", title_s))
     els.append(Paragraph(f"FIFAlgorithm | {liga} | {len(ranking)} players | "
                          f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", sub_s))
-
-    def build_table(header, rows):
-        data = [header] + rows
-        table = Table(data, repeatRows=1)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 7), ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor('#f8f9fa')])]))
-        return table
-
-    els.append(Paragraph("Tabela 1 — Performance Geral", sec_s))
     h1 = ['#', 'Jogador', 'J', 'V', 'E', 'D', 'PPJ', 'GP 5j', 'GP 10j', 'GC 5j', 'GC 10j']
     r1 = [[str(i), r['player'][:16], str(r['J']), str(r['V']), str(r['E']), str(r['D']),
            f"{r['ppj']:.2f}", f"{r['avg_gp_5']:.2f}", f"{r['avg_gp_10']:.2f}",
            f"{r['avg_gc_5']:.2f}", f"{r['avg_gc_10']:.2f}"] for i, r in enumerate(ranking, 1)]
-    els.append(build_table(h1, r1)); els.append(Spacer(1, 8))
-
-    els.append(Paragraph("Tabela 2 — Mercados HT", sec_s))
-    h2 = ['#', 'Jogador', 'J', 'O 0.5 HT', 'O 1.5 HT', 'O 2.5 HT', 'BTTS HT']
-    r2 = [[str(i), r['player'][:16], str(r['J']),
-           f"{r['over_05_ht']*100:.0f}%", f"{r['over_15_ht']*100:.0f}%",
-           f"{r['over_25_ht']*100:.0f}%", f"{r['btts_ht']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
-    els.append(build_table(h2, r2)); els.append(Spacer(1, 8))
-
-    els.append(Paragraph("Tabela 3 — Mercados FT", sec_s))
-    h3 = ['#', 'Jogador', 'J', 'O 0.5', 'O 1.5', 'O 2.5', 'O 3.5', 'O 4.5', 'O 5.5', 'BTTS FT']
-    r3 = [[str(i), r['player'][:16], str(r['J']),
-           f"{r['over_05_ft']*100:.0f}%", f"{r['over_15_ft']*100:.0f}%",
-           f"{r['over_25_ft']*100:.0f}%", f"{r['over_35_ft']*100:.0f}%",
-           f"{r['over_45_ft']*100:.0f}%", f"{r['over_55_ft']*100:.0f}%",
-           f"{r['btts_ft']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
-    els.append(build_table(h3, r3)); els.append(Spacer(1, 8))
-
-    els.append(Paragraph("Tabela 4 — Gols Individuais do Player", sec_s))
-    h4 = ['#', 'Jogador', 'J', 'Méd GP', 'Marcou +1.5', 'Marcou +2.5']
-    r4 = [[str(i), r['player'][:16], str(r['J']), f"{r['avg_gp_10']:.2f}",
-           f"{r['player_over_15']*100:.0f}%", f"{r['player_over_25']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
-    els.append(build_table(h4, r4))
+    data = [h1] + r1
+    table = Table(data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey)]))
+    els.append(table)
     els.append(Spacer(1, 10))
     els.append(Paragraph("E-Soccer Fifa Analytics | @FIFAlgorithm", foot_s))
     doc.build(els)
     return buf.getvalue()
 
 
+def generate_tips_pdf(df_f, ad, ld):
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=0.5 * cm, rightMargin=0.5 * cm,
+                            topMargin=0.8 * cm, bottomMargin=0.8 * cm)
+    els = []
+    styles = getSampleStyleSheet()
+    title_s = ParagraphStyle('T', parent=styles['Title'], fontSize=18,
+                             textColor=rl_colors.HexColor('#00f5ff'),
+                             alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Bold')
+    sub_s = ParagraphStyle('S', parent=styles['Normal'], fontSize=9,
+                           textColor=rl_colors.HexColor('#7a89a8'),
+                           alignment=TA_CENTER, spaceAfter=10)
+    els.append(Paragraph("E-Soccer Fifa Analytics — Dicas do Dia", title_s))
+    els.append(Paragraph(f"FIFAlgorithm | {datetime.now().strftime('%d/%m/%Y %H:%M')} | {len(df_f)} jogos", sub_s))
+
+    header = ['Hora', 'Liga', 'Casa', 'Fora', 'HT', 'FT', 'Linha']
+    data = [header]
+    for _, r in df_f.iterrows():
+        data.append([
+            str(r.get('hora', '--:--')),
+            str(r.get('competicao', ''))[:20],
+            str(r.get('casa', ''))[:16],
+            str(r.get('fora', ''))[:16],
+            str(r.get('Gols HT', '-')),
+            str(r.get('Gols FT', '-')),
+            str(r.get('Linha Seg FT', '-')),
+        ])
+    table = Table(data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor('#f8f9fa')])]))
+    els.append(table)
+    doc.build(els)
+    return buf.getvalue()
+
+
+def generate_pdf(df, title="E-Soccer"):
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=0.4 * cm, rightMargin=0.4 * cm,
+                            topMargin=0.8 * cm, bottomMargin=0.6 * cm)
+    els = []
+    styles = getSampleStyleSheet()
+    ts = ParagraphStyle('T', parent=styles['Title'], fontSize=14, spaceAfter=4)
+    els.append(Paragraph(title, ts))
+    els.append(Spacer(1, 6))
+    header = [str(c) for c in df.columns]
+    data = [header]
+    for _, r in df.iterrows():
+        data.append([str(v) if v is not None else '' for v in r.values])
+    nc = len(df.columns)
+    cw = [28.5 * cm / nc] * nc
+    table = Table(data, colWidths=cw, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+        ('FONTSIZE', (0, 0), (-1, -1), 6),
+        ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey)]))
+    els.append(table)
+    doc.build(els)
+    return buf.getvalue()
+
+
 # ============================================
-# RADAR — COMPUTE
+# RADAR
 # ============================================
 def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
     radar = {}
@@ -2489,16 +1973,6 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
             tendencia_tempo = '2º Tempo Forte'; badge_class = 'badge-ft-heavy'; tempo_icon = '❄️'
         else:
             tendencia_tempo = 'Equilibrado'; badge_class = 'badge-balanced'; tempo_icon = '⚖️'
-        tendencia = 'stable'; tendencia_delta = 0
-        if n >= 4 and 'Gols FT' in df_liga.columns:
-            half = n // 2
-            gf_old = pd.to_numeric(df_liga['Gols FT'].iloc[:half], errors='coerce').mean()
-            gf_new = pd.to_numeric(df_liga['Gols FT'].iloc[half:], errors='coerce').mean()
-            if not pd.isna(gf_old) and not pd.isna(gf_new) and gf_old > 0:
-                delta = (gf_new - gf_old) / gf_old
-                tendencia_delta = delta
-                if delta >= 0.15: tendencia = 'up'
-                elif delta <= -0.15: tendencia = 'down'
         o25f = avg_pct('Over 2.5 FT'); o35f = avg_pct('Over 3.5 FT'); o45f = avg_pct('Over 4.5 FT')
         o25h = avg_pct('Over 2.5 HT'); btf = avg_pct('BTTS FT')
         perfil = 'OFENSIVA' if gf >= 4.5 else ('EQUILIBRADA' if gf >= 3.2 else 'DEFENSIVA')
@@ -2509,29 +1983,22 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
                        'badge_class': badge_class, 'tempo_icon': tempo_icon,
                        'o25_ft': o25f, 'o35_ft': o35f, 'o45_ft': o45f,
                        'o25_ht': o25h, 'btts_ft': btf,
-                       'perfil': perfil, 'score': score,
-                       'tendencia': tendencia, 'tendencia_delta': tendencia_delta}
+                       'perfil': perfil, 'score': score}
     return radar
 
 
 def _build_reason_best(info, lg):
     reasons = []
-    if info['avg_ft'] >= 5.5: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (altíssima)")
-    elif info['avg_ft'] >= 4.5: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (alta)")
-    else: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo")
-    if info['o25_ft'] >= 0.75: reasons.append(f"<span class='hl'>{info['o25_ft'] * 100:.0f}%</span> dos jogos com Over 2.5 FT")
+    reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo")
+    if info['o25_ft'] >= 0.75: reasons.append(f"<span class='hl'>{info['o25_ft'] * 100:.0f}%</span> Over 2.5 FT")
     if info['o35_ft'] >= 0.55: reasons.append(f"<span class='hl'>{info['o35_ft'] * 100:.0f}%</span> Over 3.5 FT")
-    if info['o45_ft'] >= 0.4: reasons.append(f"<span class='hl'>{info['o45_ft'] * 100:.0f}%</span> Over 4.5 FT")
     if info['o25_ht'] >= 0.55: reasons.append(f"<span class='hl'>{info['o25_ht'] * 100:.0f}%</span> no 1º tempo")
     if info['btts_ft'] >= 0.7: reasons.append(f"BTTS em <span class='hl'>{info['btts_ft'] * 100:.0f}%</span>")
-    if info.get('tendencia') == 'up':
-        delta_pct = info.get('tendencia_delta', 0) * 100
-        reasons.append(f"tendência de <b>alta</b> ({delta_pct:+.0f}%)")
     return " · ".join(reasons)
 
 
 # ============================================
-# PAGE: JOGOS DO DIA (V2)
+# PAGE: JOGOS DO DIA
 # ============================================
 def page_jogos_do_dia():
     _render_html_safe(render_hero_v2())
@@ -2612,10 +2079,8 @@ def page_jogos_do_dia():
     if 'aceodds_games' not in st.session_state or not st.session_state['aceodds_games']:
         st.markdown("""<div style="background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
             padding: 16px 20px; border-radius: 10px; border-left: 4px solid #ffd600;
-            color: #f0f5ff; font-size: 14px; margin: 15px 0; box-shadow: 0 0 24px rgba(255,214,0,0.15);">
-            <b style="color:#ffd600; font-size:16px;">⚠️ Atenção</b> — Para dar início, clique em
-            <b style="color:#00f5ff;">💀 CARREGAR DADOS</b> e depois em
-            <b style="color:#00f5ff;">⚡ ATUALIZAR JOGOS</b>.
+            color: #f0f5ff; font-size: 14px; margin: 15px 0;">
+            <b style="color:#ffd600;">⚠️ Atenção</b> — Clique em <b>💀 CARREGAR DADOS</b> e depois em <b>⚡ ATUALIZAR JOGOS</b>.
         </div>""", unsafe_allow_html=True)
         return
 
@@ -2623,57 +2088,11 @@ def page_jogos_do_dia():
     df['competicao'] = df['competicao'].apply(normalize_league_name)
     ad = st.session_state.get('all_data', {})
 
-    # ==================================================
-    # 🔍 DEBUG TEMPORÁRIO — V2 com teste da API 24live
-    # ==================================================
-    st.warning(f"🔍 DEBUG: all_data tem {len(ad)} chaves")
-    for k, v in ad.items():
-        st.text(f"  • {k}: {len(v) if v is not None else 'None'} linhas")
-
+    # Debug rápido
     errs = st.session_state.get('_fetch_errors', [])
     if errs:
-        st.error(f"🚨 DEBUG ERROS ({len(errs)}):")
-        for e in errs: st.text(f"  ❌ {e}")
-    else:
-        st.info("✅ Nenhum erro registrado no _fetch_errors")
-
-    # 🧪 TESTE DIRETO NA API 24LIVE
-    if st.button("🧪 TESTAR API 24LIVE", key="test_24live_api"):
-        import requests as _req
-        from datetime import datetime as _dt, timedelta as _td
-        test_url = "https://24live.com/api/match-list-data/105"
-        _now = _dt.now()
-        _params = {
-            'lang': 'pt', 'type': 'all', 'subtournamentIds': '179369',
-            'sort': 'alpha', 'short': 0,
-            'from': (_now - _td(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
-            'to': (_now + _td(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
-            'defaultSubtournamentLimit': 1000, 'orderBy': 'desc'
-        }
-        try:
-            _r = _req.get(test_url, params=_params, timeout=30, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                'Referer': 'https://24live.com/pt/',
-                'Accept': 'application/json',
-            })
-            st.success(f"✅ HTTP {_r.status_code} · {len(_r.text)} bytes")
-            st.text(f"Primeiros 500 chars: {_r.text[:500]}")
-            try:
-                _j = _r.json()
-                _tipo = type(_j).__name__
-                _n = len(_j) if isinstance(_j, (list, dict)) else '?'
-                st.info(f"JSON válido! Tipo: {_tipo} · Total itens: {_n}")
-                if isinstance(_j, list) and len(_j) > 0:
-                    st.json(_j[0])
-                elif isinstance(_j, dict):
-                    st.json(_j)
-            except Exception as _je:
-                st.error(f"JSON inválido: {_je}")
-        except Exception as _e:
-            st.error(f"❌ ERRO no request: {type(_e).__name__}: {_e}")
-
-    st.divider()
-    # ==================================================
+        with st.expander(f"⚠️ Debug ({len(errs)} erros)", expanded=False):
+            for e in errs: st.text(f"❌ {e}")
 
     if ad:
         jc, jf = compute_jc_jf(df, ad, LEAGUES)
@@ -2714,18 +2133,17 @@ def page_jogos_do_dia():
 
     if df_f.empty:
         st.info("Nenhum jogo atende aos filtros.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True)
-        return
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
 
     st.markdown('<div class="pill-actions">', unsafe_allow_html=True)
     pdf_c1, pdf_c2, _pdf_sp = st.columns([1.4, 1.4, 4])
     with pdf_c1:
         if st.button("📄 Gerar PDF de Dicas", key="gen_tips_pdf", width='stretch', type="primary"):
-            with st.spinner(f"Gerando PDF com {len(df_f)} jogos..."):
+            with st.spinner(f"Gerando PDF..."):
                 try:
                     st.session_state['tips_pdf_bytes'] = generate_tips_pdf(df_f, ad, LEAGUES)
                     st.session_state['tips_pdf_count'] = len(df_f)
-                    st.success(f"✅ PDF gerado com {len(df_f)} jogos!")
+                    st.success(f"✅ PDF gerado!")
                 except Exception as e: st.error(f"Erro: {e}")
     with pdf_c2:
         if 'tips_pdf_bytes' in st.session_state:
@@ -2750,7 +2168,7 @@ def page_jogos_do_dia():
             if key_b not in cache: cache[key_b] = analyze_player_deep_profile(ldf, fora_raw)
             pa, pb = cache[key_a], cache[key_b]
         st.markdown(render_card_row_v2(row, casa_raw, fora_raw, ldf=ldf, perfil_a=pa, perfil_b=pb), unsafe_allow_html=True)
-        with st.expander(f"🔍 Ver análise completa — {casa_raw} × {fora_raw}", expanded=False):
+        with st.expander(f"🔍 Análise completa — {casa_raw} × {fora_raw}", expanded=False):
             if ldf is not None:
                 _render_html_safe(render_h2h_comparison(casa_raw, fora_raw, ldf,
                                                         hora=str(row.get('hora', '--:--')),
@@ -2758,32 +2176,11 @@ def page_jogos_do_dia():
             render_match_card(row, ad, LEAGUES, idx=i)
     st.session_state['_profile_cache'] = cache
 
-    with st.expander("📊 Ver tabela completa + Downloads", expanded=False):
-        cols = ['hora', 'competicao', 'casa', 'fora', 'Gols HT', 'Gols FT', 'Linha Seg FT',
-                'Over 0.5 HT', 'Over 1.5 HT', 'Over 2.5 HT',
-                'Over 0.5 FT', 'Over 1.5 FT', 'Over 2.5 FT',
-                'Over 3.5 FT', 'Over 4.5 FT', 'Over 5.5 FT', 'BTTS FT']
-        df_sum = df_f[[c for c in cols if c in df_f.columns]]
-        st.dataframe(df_sum, width='stretch', hide_index=True, height=400)
-        c1, c2 = st.columns(2)
-        with c1:
-            csv = df_sum.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 CSV", data=csv,
-                               file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                               mime="text/csv", width='stretch')
-        with c2:
-            try:
-                pdf = generate_pdf(df_sum, "E-Soccer — Jogos do Dia")
-                st.download_button("📄 PDF Simples", data=pdf,
-                                   file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                                   mime="application/pdf", width='stretch')
-            except Exception as e: st.warning(f"PDF: {e}")
-
     st.markdown(render_footer_v2(), unsafe_allow_html=True)
 
 
 # ============================================
-# PAGE: RADAR (V2)
+# PAGE: RADAR
 # ============================================
 def render_radar_tab():
     _render_html_safe(render_hero_v2())
@@ -2809,14 +2206,12 @@ def render_radar_tab():
         st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     if isinstance(df_ac, list): df_ac = pd.DataFrame(df_ac)
     if df_ac.empty:
-        st.info("Sem dados.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+        st.info("Sem dados."); st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     df_ac = df_ac.copy()
     df_ac['competicao'] = df_ac['competicao'].apply(normalize_league_name)
     radar = compute_radar_from_fixtures(df_ac, RADAR_GAMES)
     if not radar:
-        st.warning("Sem dados.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+        st.warning("Sem dados."); st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     rank = sorted(radar.items(), key=lambda x: -x[1]['score'])
 
     best_score = rank[0][1]['score'] if rank else 0
@@ -2846,95 +2241,47 @@ def render_radar_tab():
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                     <span class="best-badge">🏆 MELHOR PARA OVER GOLS</span>
-                    <span style="font-size:22px; font-weight:900; color:#f0f5ff; text-shadow: 0 0 18px rgba(0,255,136,0.5);">
+                    <span style="font-size:22px; font-weight:900; color:#f0f5ff;">
                         {LEAGUES.get(best_lg, {}).get('icon', '⚽')} {best_lg}
                     </span>
                     <span class="{best_info['badge_class']}" style="font-size:12px; padding:6px 14px;">
                         {best_info['tempo_icon']} {best_info['tendencia_tempo']} ({best_info['pct_ht']:.0f}% HT)
                     </span>
                 </div>
-                <div style="display:flex; align-items:center; gap:14px;">
-                    <div style="text-align:right;">
-                        <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Score</div>
-                        <div style="font-size:32px; font-weight:900; color:#00ff88; font-family:'JetBrains Mono',monospace; line-height:1; text-shadow: 0 0 20px rgba(0,255,136,0.8);">{best_info['score']}</div>
-                    </div>
-                </div>
+                <div style="font-size:32px; font-weight:900; color:#00ff88; font-family:'JetBrains Mono',monospace;">{best_info['score']}</div>
             </div>
             <div class="best-reason">
-                <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px;">💡 Por que está em destaque:</div>
+                <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; font-weight:800; margin-bottom:4px;">💡 Por que está em destaque:</div>
                 <div>{reason}</div>
             </div>
             <div class="thermometer" style="margin-top:14px;">
-                <div style="width:{best_info['score']}%; background: linear-gradient(90deg, #00ff88, #00f5ff); box-shadow: 0 0 15px rgba(0,255,136,0.7);"></div>
-            </div>
-            <div style="margin-top:12px;">
-                <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px;">⏱️ Distribuição de Gols (1º Tempo vs 2º Tempo)</div>
-                <div class="dual-bar">
-                    <div class="ht" style="width:{best_info['pct_ht']}%;"></div>
-                    <div class="ft" style="width:{best_info['pct_ft']}%;"></div>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:11px; color:#7a89a8; margin-top:4px;">
-                    <span>🔥 HT: {best_info['pct_ht']:.0f}%</span>
-                    <span>❄️ FT: {best_info['pct_ft']:.0f}%</span>
-                </div>
-            </div>
-            <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px 18px; font-size:13px; color:#f0f5ff;">
-                <span>⚽ Média FT: <b style="color:#00ff88; text-shadow:0 0 10px rgba(0,255,136,0.5);">{best_info['avg_ft']:.2f}</b></span>
-                <span>⏱️ Over 2.5 HT: <b style="color:#b537ff; text-shadow:0 0 10px rgba(181,55,255,0.5);">{best_info['o25_ht'] * 100:.0f}%</b></span>
-                <span>🎯 Over 2.5 FT: <b style="color:#00ff88; text-shadow:0 0 10px rgba(0,255,136,0.5);">{best_info['o25_ft'] * 100:.0f}%</b></span>
-                <span>🔥 Over 3.5 FT: <b style="color:#00f5ff; text-shadow:0 0 10px rgba(0,245,255,0.5);">{best_info['o35_ft'] * 100:.0f}%</b></span>
-                <span>💥 Over 4.5 FT: <b style="color:#ff8c00; text-shadow:0 0 10px rgba(255,140,0,0.5);">{best_info['o45_ft'] * 100:.0f}%</b></span>
-                <span>👥 BTTS FT: <b style="color:#b537ff; text-shadow:0 0 10px rgba(181,55,255,0.5);">{best_info['btts_ft'] * 100:.0f}%</b></span>
+                <div style="width:{best_info['score']}%; background: linear-gradient(90deg, #00ff88, #00f5ff);"></div>
             </div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown('<div class="section-label">📊 Ranking Completo de Ligas</div>', unsafe_allow_html=True)
-    trend_map = {'up': ('📈', 'SUBINDO', '#00ff88'),
-                 'down': ('📉', 'CAINDO', '#00f5ff'),
-                 'stable': ('➖', 'ESTÁVEL', '#7a89a8')}
+    st.markdown('<div class="section-label">📊 Ranking Completo</div>', unsafe_allow_html=True)
     for i, (lg, info) in enumerate(rank[1:], 2):
         md = {2: '🥈', 3: '🥉'}.get(i, f'#{i}')
         bc = {'OFENSIVA': 'badge-ofensivo', 'EQUILIBRADA': 'badge-equilibrado',
               'DEFENSIVA': 'badge-defensivo'}[info['perfil']]
-        t_ic, t_txt, t_cor = trend_map.get(info.get('tendencia', 'stable'), ('➖', 'ESTÁVEL', '#7a89a8'))
-        delta_pct = info.get('tendencia_delta', 0) * 100
-        delta_txt = f"{delta_pct:+.0f}%" if abs(delta_pct) > 0.5 else ""
         st.markdown(f"""<div class="league-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <span style="font-size:16px; font-weight:800;">{md} {lg}</span>
-                    <span style="font-size:11px; color:#7a89a8; font-weight:700;">({info['n']} jogos)</span>
+                    <span style="font-size:11px; color:#7a89a8;">({info['n']} jogos)</span>
                     <span class="{bc}">{info['perfil']}</span>
-                    <span style="font-size:11px; color:{t_cor}; font-weight:800; background: rgba(0,245,255,0.05); padding:4px 10px; border-radius:100px; border: 1px solid {t_cor}66;">{t_ic} {t_txt} {delta_txt}</span>
-                    <span class="{info['badge_class']}">{info['tempo_icon']} {info['tendencia_tempo']} ({info['pct_ht']:.0f}% HT)</span>
+                    <span class="{info['badge_class']}">{info['tempo_icon']} {info['tendencia_tempo']}</span>
                 </div>
-                <div style="font-size:24px; font-weight:900; color:#00f5ff; text-shadow: 0 0 14px rgba(0,245,255,0.5);">{info['score']}</div>
+                <div style="font-size:24px; font-weight:900; color:#00f5ff;">{info['score']}</div>
             </div>
             <div class="thermometer"><div style="width:{info['score']}%;"></div></div>
-            <div style="margin-top:10px;">
-                <div class="dual-bar">
-                    <div class="ht" style="width:{info['pct_ht']}%;"></div>
-                    <div class="ft" style="width:{info['pct_ft']}%;"></div>
-                </div>
-                <div style="display:flex; justify-content:space-between; font-size:10.5px; color:#7a89a8; margin-top:3px;">
-                    <span>🔥 1º T: {info['pct_ht']:.0f}%</span>
-                    <span>❄️ 2º T: {info['pct_ft']:.0f}%</span>
-                </div>
-            </div>
-            <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12.5px; color:#7a89a8;">
-                <span>Over 2.5 HT: <b style="color:#b537ff;">{info['o25_ht'] * 100:.0f}%</b></span>
-                <span>Over 2.5 FT: <b style="color:#00ff88;">{info['o25_ft'] * 100:.0f}%</b></span>
-                <span>Over 3.5 FT: <b style="color:#00f5ff;">{info['o35_ft'] * 100:.0f}%</b></span>
-                <span>Over 4.5 FT: <b style="color:#ff8c00;">{info['o45_ft'] * 100:.0f}%</b></span>
-                <span>BTTS FT: <b style="color:#b537ff;">{info['btts_ft'] * 100:.0f}%</b></span>
-            </div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown(render_footer_v2(), unsafe_allow_html=True)
 
 
 # ============================================
-# PAGE: INSIGHTS PLAYERS (V2)
+# PAGE: INSIGHTS PLAYERS
 # ============================================
 def render_insights_players_tab():
     _render_html_safe(render_hero_v2())
@@ -2958,8 +2305,9 @@ def render_insights_players_tab():
     df_ac = st.session_state.get('aceodds_games', None)
 
     if not ad:
-        st.markdown("""<div class="warning-banner">
-            <b>⚠️ Dados não carregados</b> — Volte para <b>📅 Jogos do Dia</b> e clique em <b>💀 Carregar Dados</b>.
+        st.markdown("""<div style="background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
+            padding: 12px 18px; border-radius: 10px; border-left: 4px solid #ffd600; color: #f0f5ff;">
+            <b style="color:#ffd600;">⚠️ Dados não carregados</b> — Volte para <b>📅 Jogos do Dia</b>.
         </div>""", unsafe_allow_html=True)
         st.markdown(render_footer_v2(), unsafe_allow_html=True); return
 
@@ -2992,17 +2340,15 @@ def render_insights_players_tab():
             if h: players_set.add(h)
             if a: players_set.add(a)
     if not players_set:
-        st.info("Sem players para analisar.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+        st.info("Sem players."); st.markdown(render_footer_v2(), unsafe_allow_html=True); return
 
-    with st.spinner("Calculando ranking (últimos 10 jogos)..."):
+    with st.spinner("Calculando ranking..."):
         ranking = []
         for p in players_set:
             s = compute_player_ranking_stats(ldf, p)
             if s and s['J'] > 0: ranking.append(s)
     if not ranking:
-        st.info("Sem dados suficientes.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+        st.info("Sem dados."); st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     ranking.sort(key=lambda x: -x['ppj'])
 
     upd = datetime.now().strftime('%H:%M')
@@ -3024,21 +2370,7 @@ def render_insights_players_tab():
         </div>
     </div>""", unsafe_allow_html=True)
 
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        if st.button("📄 Gerar PDF do Ranking", key="insights_pdf_btn_v5", width='stretch', type="primary"):
-            with st.spinner("Gerando PDF..."):
-                try:
-                    st.session_state['insights_pdf_bytes'] = generate_insights_players_pdf(ranking, liga_sel)
-                    st.success("✅ PDF gerado!")
-                except Exception as e: st.error(f"Erro: {e}")
-    with c2:
-        if 'insights_pdf_bytes' in st.session_state:
-            st.download_button("📥 Baixar PDF", data=st.session_state['insights_pdf_bytes'],
-                               file_name=f"ranking_players_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                               mime="application/pdf", width='stretch')
-
-    st.markdown('<div class="section-label">🏆 Tabela 1 — Performance Geral (J · Forma · PPJ · Médias)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">🏆 Ranking de Performance</div>', unsafe_allow_html=True)
 
     def cor_gp(v):
         if v >= 2.5: return '#00ff88'
@@ -3054,44 +2386,6 @@ def render_insights_players_tab():
         if v <= 2.5: return '#ff8c00'
         return '#ff2e88'
 
-    rows = ''
-    for idx, r in enumerate(ranking, 1):
-        ppj = r['ppj']
-        if ppj >= 2.5: ppj_c = '#00ff88'
-        elif ppj >= 2.0: ppj_c = '#00f5ff'
-        elif ppj >= 1.5: ppj_c = '#ffd600'
-        elif ppj >= 1.0: ppj_c = '#ff8c00'
-        else: ppj_c = '#ff2e88'
-        md = '🥇' if idx == 1 else ('🥈' if idx == 2 else ('🥉' if idx == 3 else f'<span style="color:#7a89a8;">#{idx}</span>'))
-        form_html = ''
-        for f in r['form']:
-            if f == 'V': bg, fc, sh = '#00ff88', '#05070f', 'rgba(0,255,136,0.7)'
-            elif f == 'E': bg, fc, sh = '#ffd600', '#05070f', 'rgba(255,214,0,0.7)'
-            else: bg, fc, sh = '#ff2e88', '#ffffff', 'rgba(255,46,136,0.7)'
-            form_html += (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
-                          f'width:17px;height:17px;border-radius:50%;background:{bg};color:{fc};'
-                          f'font-size:9px;font-weight:900;font-family:\'JetBrains Mono\',monospace;'
-                          f'margin:0 1.5px;box-shadow:0 0 8px {sh};line-height:1;flex-shrink:0;">{f}</span>')
-        rows += f'''<div class="rank-row r1">
-            <div class="rank-pos">{md}</div>
-            <div class="rank-name">{r['player'][:16]}</div>
-            <div class="rank-num">{r['J']}</div>
-            <div class="rank-form">{form_html}</div>
-            <div class="rank-num" style="color:{ppj_c};font-weight:900;font-size:15px;">{ppj:.2f}</div>
-            <div class="rank-num" style="color:{cor_gp(r['avg_gp_5'])};">{r['avg_gp_5']:.2f}</div>
-            <div class="rank-num" style="color:{cor_gp(r['avg_gp_10'])};">{r['avg_gp_10']:.2f}</div>
-            <div class="rank-num" style="color:{cor_gc(r['avg_gc_5'])};">{r['avg_gc_5']:.2f}</div>
-            <div class="rank-num" style="color:{cor_gc(r['avg_gc_10'])};">{r['avg_gc_10']:.2f}</div>
-        </div>'''
-    header = '''<div class="rank-header r1">
-        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
-        <div class="rank-hcell">J</div><div class="rank-hcell">Forma (10)</div>
-        <div class="rank-hcell">PPJ</div><div class="rank-hcell">GP 5j</div>
-        <div class="rank-hcell">GP 10j</div><div class="rank-hcell">GC 5j</div>
-        <div class="rank-hcell">GC 10j</div></div>'''
-    _render_html_safe(f'<div class="rank-list">{header}{rows}</div>')
-
-    st.markdown('<div class="section-label">⏱️ Tabela 2 — Mercados HT (1º Tempo)</div>', unsafe_allow_html=True)
     def cor_pct(p):
         pct = p * 100
         if pct >= 80: return '#00ff88'
@@ -3099,10 +2393,41 @@ def render_insights_players_tab():
         if pct >= 40: return '#ffd600'
         if pct >= 20: return '#ff8c00'
         return '#7a89a8'
+
+    rows = ''
+    for idx, r in enumerate(ranking, 1):
+        ppj = r['ppj']
+        ppj_c = '#00ff88' if ppj >= 2.5 else ('#00f5ff' if ppj >= 2.0 else ('#ffd600' if ppj >= 1.5 else '#ff8c00'))
+        md = '🥇' if idx == 1 else ('🥈' if idx == 2 else ('🥉' if idx == 3 else f'#{idx}'))
+        form_html = ''
+        for f in r['form'][:10]:
+            bg = '#00ff88' if f == 'V' else ('#ffd600' if f == 'E' else '#ff2e88')
+            fc = '#05070f' if f in ('V', 'E') else '#ffffff'
+            form_html += f'<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:{bg};color:{fc};font-size:9px;font-weight:900;margin:0 1.5px;">{f}</span>'
+        rows += f'''<div class="rank-row r1">
+            <div class="rank-pos">{md}</div>
+            <div class="rank-name">{r['player'][:16]}</div>
+            <div class="rank-num">{r['J']}</div>
+            <div class="rank-form">{form_html}</div>
+            <div class="rank-num" style="color:{ppj_c};font-weight:900;">{ppj:.2f}</div>
+            <div class="rank-num" style="color:{cor_gp(r['avg_gp_5'])};">{r['avg_gp_5']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gp(r['avg_gp_10'])};">{r['avg_gp_10']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gc(r['avg_gc_5'])};">{r['avg_gc_5']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gc(r['avg_gc_10'])};">{r['avg_gc_10']:.2f}</div>
+        </div>'''
+    header = '''<div class="rank-header r1">
+        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
+        <div class="rank-hcell">J</div><div class="rank-hcell">Forma</div>
+        <div class="rank-hcell">PPJ</div><div class="rank-hcell">GP 5j</div>
+        <div class="rank-hcell">GP 10j</div><div class="rank-hcell">GC 5j</div>
+        <div class="rank-hcell">GC 10j</div></div>'''
+    _render_html_safe(f'<div class="rank-list">{header}{rows}</div>')
+
+    st.markdown('<div class="section-label">⏱️ Mercados HT</div>', unsafe_allow_html=True)
     rows2 = ''
     for idx, r in enumerate(ranking, 1):
         rows2 += f'''<div class="rank-row r2">
-            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-num" style="color:#7a89a8;">{idx}</div>
             <div class="rank-name">{r['player'][:16]}</div>
             <div class="rank-num">{r['J']}</div>
             <div class="rank-num" style="color:{cor_pct(r['over_05_ht'])};">{r['over_05_ht']*100:.0f}%</div>
@@ -3117,11 +2442,11 @@ def render_insights_players_tab():
         <div class="rank-hcell">BTTS HT</div></div>'''
     _render_html_safe(f'<div class="rank-list">{header2}{rows2}</div>')
 
-    st.markdown('<div class="section-label">⚽ Tabela 3 — Mercados FT (Jogo Completo)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">⚽ Mercados FT</div>', unsafe_allow_html=True)
     rows3 = ''
     for idx, r in enumerate(ranking, 1):
         rows3 += f'''<div class="rank-row r3">
-            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-num" style="color:#7a89a8;">{idx}</div>
             <div class="rank-name">{r['player'][:16]}</div>
             <div class="rank-num">{r['J']}</div>
             <div class="rank-num" style="color:{cor_pct(r['over_05_ft'])};">{r['over_05_ft']*100:.0f}%</div>
@@ -3134,17 +2459,17 @@ def render_insights_players_tab():
         </div>'''
     header3 = '''<div class="rank-header r3">
         <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
-        <div class="rank-hcell">J</div><div class="rank-hcell">O 0.5 FT</div>
-        <div class="rank-hcell">O 1.5 FT</div><div class="rank-hcell">O 2.5 FT</div>
-        <div class="rank-hcell">O 3.5 FT</div><div class="rank-hcell">O 4.5 FT</div>
-        <div class="rank-hcell">O 5.5 FT</div><div class="rank-hcell">BTTS FT</div></div>'''
+        <div class="rank-hcell">J</div><div class="rank-hcell">O 0.5</div>
+        <div class="rank-hcell">O 1.5</div><div class="rank-hcell">O 2.5</div>
+        <div class="rank-hcell">O 3.5</div><div class="rank-hcell">O 4.5</div>
+        <div class="rank-hcell">O 5.5</div><div class="rank-hcell">BTTS</div></div>'''
     _render_html_safe(f'<div class="rank-list">{header3}{rows3}</div>')
 
-    st.markdown('<div class="section-label">🎯 Tabela 4 — Gols Individuais do Player</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">🎯 Gols Individuais</div>', unsafe_allow_html=True)
     rows4 = ''
     for idx, r in enumerate(ranking, 1):
         rows4 += f'''<div class="rank-row r4">
-            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-num" style="color:#7a89a8;">{idx}</div>
             <div class="rank-name">{r['player'][:16]}</div>
             <div class="rank-num">{r['J']}</div>
             <div class="rank-num" style="color:#00f5ff;">{r['avg_gp_10']:.2f}</div>
@@ -3154,135 +2479,8 @@ def render_insights_players_tab():
     header4 = '''<div class="rank-header r4">
         <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
         <div class="rank-hcell">J</div><div class="rank-hcell">Méd GP</div>
-        <div class="rank-hcell">Marcou +1.5</div><div class="rank-hcell">Marcou +2.5</div></div>'''
+        <div class="rank-hcell">+1.5</div><div class="rank-hcell">+2.5</div></div>'''
     _render_html_safe(f'<div class="rank-list">{header4}{rows4}</div>')
-
-    st.markdown('<div class="section-label">⭐ Destaques da Liga</div>', unsafe_allow_html=True)
-    best_ppj = ranking[0]
-    best_atk = sorted(ranking, key=lambda x: -x['avg_gp_10'])[0]
-    best_def = sorted(ranking, key=lambda x: x['avg_gc_10'])[0]
-    best_over = sorted(ranking, key=lambda x: -x['over_35_ft'])[0]
-    worst_atk = sorted(ranking, key=lambda x: x['avg_gp_10'])[0]
-    worst_def = sorted(ranking, key=lambda x: -x['avg_gc_10'])[0]
-
-    def card(title, icon, player, lines, kind='good'):
-        if kind == 'good':
-            border_c = '#00ff88'; bg_grad = 'rgba(0,255,136,0.08)'; label_c = '#00ff88'
-        elif kind == 'bad':
-            border_c = '#ff2e88'; bg_grad = 'rgba(255,46,136,0.08)'; label_c = '#ff2e88'
-        else:
-            border_c = '#00f5ff'; bg_grad = 'rgba(0,245,255,0.06)'; label_c = '#00f5ff'
-        rows_html = ''
-        for label, value, cor in lines:
-            rows_html += f'<div class="lp-row"><span>{label}</span><b style="color:{cor};font-size:15px;">{value}</b></div>'
-        return f'''<div class="lp-market-card" style="border-color:{border_c}55;background:linear-gradient(135deg, {bg_grad} 0%, rgba(0,245,255,0.03) 100%);box-shadow:0 0 24px {border_c}22;height:100%;">
-            <div class="lp-title" style="color:{label_c};"><span style="font-size:16px;">{icon}</span> {title}</div>
-            <div style="font-size:17px;font-weight:900;color:#f0f5ff;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{player}</div>
-            {rows_html}</div>'''
-
-    st.markdown('<div style="font-size:11.5px;font-weight:900;color:#00ff88;margin:8px 0 8px 0;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 10px rgba(0,255,136,0.5);">✅ Melhores da Liga</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(card('MELHOR PPJ', '🥇', best_ppj['player'],
-                         [('Pontos por Jogo', f"{best_ppj['ppj']:.2f}", '#00ff88'),
-                          ('Jogos', best_ppj['J'], '#f0f5ff'),
-                          ('V / E / D', f"{best_ppj['V']}/{best_ppj['E']}/{best_ppj['D']}", '#f0f5ff')], kind='good'), unsafe_allow_html=True)
-    with c2:
-        st.markdown(card('MELHOR ATAQUE', '⚔️', best_atk['player'],
-                         [('Média Gols Pró', f"{best_atk['avg_gp_10']:.2f}", '#00ff88'),
-                          ('Total GP (10j)', best_atk['GP'], '#f0f5ff'),
-                          ('Média 5j', f"{best_atk['avg_gp_5']:.2f}", '#00f5ff')], kind='good'), unsafe_allow_html=True)
-    with c3:
-        st.markdown(card('MELHOR DEFESA', '🛡️', best_def['player'],
-                         [('Média Gols Contra', f"{best_def['avg_gc_10']:.2f}", '#00ff88'),
-                          ('Total GC (10j)', best_def['GC'], '#f0f5ff'),
-                          ('Média 5j', f"{best_def['avg_gc_5']:.2f}", '#00f5ff')], kind='good'), unsafe_allow_html=True)
-    with c4:
-        st.markdown(card('MELHOR P/ OVER GOLS', '🎯', best_over['player'],
-                         [('% Jogos c/ 4+ Gols', f"{best_over['over_35_ft']*100:.0f}%", '#00ff88'),
-                          ('% Over 2.5 FT', f"{best_over['over_25_ft']*100:.0f}%", '#00f5ff'),
-                          ('Média Gols/Jogo', f"{(best_over['avg_gp_10'] + best_over['avg_gc_10']):.2f}", '#ffd600')], kind='good'), unsafe_allow_html=True)
-
-    st.markdown('<div style="font-size:11.5px;font-weight:900;color:#ff2e88;margin:14px 0 8px 0;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 10px rgba(255,46,136,0.5);">⚠️ Piores da Liga</div>', unsafe_allow_html=True)
-    c5, c6 = st.columns(2)
-    with c5:
-        st.markdown(card('PIOR ATAQUE', '📉', worst_atk['player'],
-                         [('Média Gols Pró', f"{worst_atk['avg_gp_10']:.2f}", '#ff2e88'),
-                          ('Total GP (10j)', worst_atk['GP'], '#f0f5ff'),
-                          ('Média 5j', f"{worst_atk['avg_gp_5']:.2f}", '#ff8c00')], kind='bad'), unsafe_allow_html=True)
-    with c6:
-        st.markdown(card('PIOR DEFESA', '🚨', worst_def['player'],
-                         [('Média Gols Contra', f"{worst_def['avg_gc_10']:.2f}", '#ff2e88'),
-                          ('Total GC (10j)', worst_def['GC'], '#f0f5ff'),
-                          ('Média 5j', f"{worst_def['avg_gc_5']:.2f}", '#ff8c00')], kind='bad'), unsafe_allow_html=True)
-
-    st.markdown(render_footer_v2(), unsafe_allow_html=True)
-
-
-# ============================================
-# PAGE: LIGA INDIVIDUAL
-# ============================================
-def page_liga(league_name):
-    _render_html_safe(render_hero_v2())
-
-    st.markdown('<div class="nav-v2">', unsafe_allow_html=True)
-    n1, n2, n3, n4 = st.columns(4)
-    with n1:
-        if st.button("⬅️ VOLTAR AO MENU", key=f"liga_back_{league_name}", width='stretch', type="primary"):
-            st.session_state.page = 'jogos_dia'; st.rerun()
-    with n2:
-        if st.button("📅 JOGOS DO DIA", key=f"liga_jogos_{league_name}", width='stretch'):
-            st.session_state.page = 'jogos_dia'; st.rerun()
-    with n3:
-        if st.button("📡 RADAR FIFA", key=f"liga_radar_{league_name}", width='stretch'):
-            st.session_state.page = 'radar'; st.rerun()
-    with n4:
-        if st.button("🧠 INSIGHTS PLAYERS", key=f"liga_ins_{league_name}", width='stretch'):
-            st.session_state.page = 'insights_players'; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    d = st.session_state.get('all_data', {}).get(league_name, pd.DataFrame())
-    if d.empty:
-        st.info(f"Sem partidas finalizadas para **{league_name}** hoje.")
-        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
-
-    tg = int(d['home_score'].sum() + d['away_score'].sum())
-    ag = (d['home_score'] + d['away_score']).mean()
-    st.markdown(f"""<div class="info-v2-row">
-        <div class="info-v2-card">
-            <div class="info-v2-icon">📊</div>
-            <div class="info-v2-content">
-                <div class="info-v2-label">TOTAL DE PARTIDAS</div>
-                <div class="info-v2-value">{len(d)}</div>
-            </div>
-        </div>
-        <div class="info-v2-card">
-            <div class="info-v2-icon">⚽</div>
-            <div class="info-v2-content">
-                <div class="info-v2-label">TOTAL DE GOLS</div>
-                <div class="info-v2-value purple">{tg}</div>
-                <div class="info-v2-sub">Média {ag:.2f}/jogo</div>
-            </div>
-        </div>
-        <div class="info-v2-card">
-            <div class="info-v2-icon">✅</div>
-            <div class="info-v2-content" style="flex:1;">
-                <div class="info-v2-label" style="color:#00f5ff;">STATUS DA LIGA</div>
-                <div class="info-v2-prob-text">100% FINALIZADAS · HOJE</div>
-            </div>
-            <div class="info-v2-online"><span class="info-v2-dot"></span> ONLINE</div>
-        </div>
-    </div>""", unsafe_allow_html=True)
-
-    dd = d.copy()
-    dd['sl'] = '✅'
-    dd['hh'] = dd['ht_home'].fillna('-').astype(str)
-    dd['ha'] = dd['ht_away'].fillna('-').astype(str)
-    cs = ['time', 'date', 'home_team', 'away_team', 'home_score', 'away_score', 'hh', 'ha', 'sl']
-    cm = {'time': '🕐', 'date': '📅', 'home_team': '🏠', 'away_team': '✈️',
-          'home_score': 'FT Casa', 'away_score': 'FT Fora',
-          'hh': 'HT Casa', 'ha': 'HT Fora', 'sl': '📌'}
-    st.dataframe(dd[cs].rename(columns=cm), width='stretch', hide_index=True, height=500)
 
     st.markdown(render_footer_v2(), unsafe_allow_html=True)
 
@@ -3300,12 +2498,9 @@ with st.sidebar:
         </div>
     </div>""", unsafe_allow_html=True)
     st.markdown('<div class="sb-section">NAVEGAÇÃO</div>', unsafe_allow_html=True)
-    nav_items = [
-        ('jogos_dia', '📅 Jogos do Dia'),
-        ('radar', '📡 Radar FIFA'),
-        ('insights_players', '🧠 Insights Players'),
-    ]
-    for key, label in nav_items:
+    for key, label in [('jogos_dia', '📅 Jogos do Dia'),
+                       ('radar', '📡 Radar FIFA'),
+                       ('insights_players', '🧠 Insights Players')]:
         active = st.session_state.page == key
         if st.button(label, key=f'nav_{key}', width='stretch',
                      type='primary' if active else 'secondary'):
@@ -3330,7 +2525,7 @@ with st.sidebar:
         if ok: st.success(f"✅ {msg}")
         else: st.error(f"❌ {msg}")
     st.markdown(f"""<div class="sb-footer">
-        FIFAlgorithm v6.12.1 - Streamlit
+        FIFAlgorithm v6.13.0 - Streamlit
         <div class="sb-footer-user">
             <div class="sb-avatar">V</div>
             <div>
@@ -3350,8 +2545,5 @@ elif page == 'insights_players':
     render_insights_players_tab()
 elif page == 'radar':
     render_radar_tab()
-elif page.startswith('liga_'):
-    lg_name = page.replace('liga_', '')
-    if lg_name in LEAGUES: page_liga(lg_name)
 else:
     page_jogos_do_dia()
