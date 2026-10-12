@@ -2042,7 +2042,7 @@ def page_jogos_do_dia():
         if st.button("⚡ ATUALIZAR JOGOS", key="load_games", width='stretch'):
             with st.spinner("Atualizando jogos..."):
                 st.cache_data.clear()  # ← LIMPA CACHE
-                jogos = scrape_aceodds(...)
+                jogos = scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT)
                 if jogos:
                     st.session_state['aceodds_games'] = jogos
                     st.session_state['aceodds_last_update'] = datetime.now()
