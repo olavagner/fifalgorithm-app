@@ -2867,11 +2867,22 @@ def page_jogos_do_dia():
     df = pd.DataFrame(st.session_state['aceodds_games'])
     df['competicao'] = df['competicao'].apply(normalize_league_name)
     ad = st.session_state.get('all_data', {})
+
+    # 🔍 DEBUG TEMPORÁRIO — remover depois
+    if not ad:
+        st.error(f"🚨 DEBUG: all_data VAZIO! Tipo: {type(ad)}")
+    else:
+        total_rows = sum(len(v) for v in ad.values() if v is not None and not v.empty)
+        st.warning(f"🔍 DEBUG: all_data tem {len(ad)} chaves · {total_rows} linhas totais")
+        for k, v in ad.items():
+            st.text(f"  • {k}: {len(v) if v is not None else 'None'} linhas")
+
     if ad:
         jc, jf = compute_jc_jf(df, ad, LEAGUES)
         df['JC'], df['JF'] = jc, jf
         with st.spinner("Rodando Monte Carlo..."):
             r = monte_carlo_cached(df, ad)
+        ...
         for c, v in r.items(): df[c] = v
         for c in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
             df[c] = pd.to_numeric(df[c], errors='coerce')
