@@ -1131,7 +1131,11 @@ class EFootballScraper:
     def __init__(self):
         self.base_url = "https://24live.com/api"
 
-    def _fetch_via_playwright(self, url: str, params: dict, timeout: int = 30):
+    def _fetch_via_playwright(self, url: str, params: dict, timeout: int = 60):
+        """
+        Usa Chromium + JavaScript fetch DENTRO da página.
+        Muito mais eficaz contra Cloudflare que page.goto() direto.
+        """
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -1144,38 +1148,84 @@ class EFootballScraper:
             with sync_playwright() as p:
                 browser = p.chromium.launch(
                     headless=True,
-                    args=['--no-sandbox', '--disable-setuid-sandbox',
-                          '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-blink-features=AutomationControlled',  # ← anti-detecção
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process',
+                    ]
                 )
                 context = browser.new_context(
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                                'AppleWebKit/537.36 (KHTML, like Gecko) '
                                'Chrome/131.0.0.0 Safari/537.36',
                     locale='pt-BR',
+                    timezone_id='America/Sao_Paulo',
                     viewport={'width': 1920, 'height': 1080},
                 )
+                # Remove flag "webdriver" que Cloudflare detecta
+                context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                    Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en'] });
+                    window.chrome = { runtime: {} };
+                """)
+
                 page = context.new_page()
-                page.goto('https://24live.com/pt/', wait_until='domcontentloaded', timeout=timeout * 1000)
-                page.wait_for_timeout(3000)
-                page.goto(full_url, wait_until='domcontentloaded', timeout=timeout * 1000)
-                page.wait_for_timeout(1500)
-                text = page.content()
+
+                # 1) Vai pra home pra pegar cf_clearance cookie
+                page.goto('https://24live.com/pt/',
+                          wait_until='domcontentloaded', timeout=timeout * 1000)
+                # Espera o Cloudflare resolver o challenge (5s costuma bastar)
+                page.wait_for_timeout(6000)
+
+                # 2) Faz a requisição VIA JAVASCRIPT da própria página
+                #    (usa cookies e headers que Cloudflare já validou)
+                result = page.evaluate("""
+                    async (apiUrl) => {
+                        try {
+                            const r = await fetch(apiUrl, {
+                                credentials: 'include',
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Language': 'pt-BR,pt;q=0.9'
+                                }
+                            });
+                            return { status: r.status, text: await r.text() };
+                        } catch(e) {
+                            return { status: 0, text: 'ERR: ' + e.message };
+                        }
+                    }
+                """, full_url)
+
                 browser.close()
 
-                from bs4 import BeautifulSoup as _BS
-                soup = _BS(text, 'html.parser')
-                body = soup.find('pre') or soup.find('body')
-                raw = body.get_text() if body else text
+                # 3) Parse do resultado
+                status = result.get('status', 0)
+                text = result.get('text', '')
+
+                if status != 200:
+                    st.session_state['_fetch_errors'].append(
+                        f"Playwright: HTTP {status} (len={len(text)})"
+                    )
+                    return None
+
                 try:
-                    return json.loads(raw)
+                    return json.loads(text)
                 except Exception:
-                    m = re.search(r'(\[.*\]|\{.*\})', raw, re.DOTALL)
+                    m = re.search(r'(\[.*\]|\{.*\})', text, re.DOTALL)
                     if m:
-                        try: return json.loads(m.group(1))
-                        except: pass
+                        try:
+                            return json.loads(m.group(1))
+                        except:
+                            pass
                     return None
         except Exception as e:
-            st.session_state['_fetch_errors'].append(f"Playwright: {type(e).__name__}: {e}")
+            st.session_state['_fetch_errors'].append(
+                f"Playwright: {type(e).__name__}: {str(e)[:120]}"
+            )
             return None
 
     def get_league_matches(self, sid, max_retries=2, timeout=30):
