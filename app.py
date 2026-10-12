@@ -1,4 +1,5 @@
-# app.py — E-Soccer Fifa Analytics v6.5.8 (Dark Neon + HT/FT Radar + Login 2 colunas)
+# app.py — E-Soccer Fifa Analytics v6.12.0
+# (Hero IN ALGORITHM WE TRUST + Remoção de cards + Cache do Monte Carlo)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -7,6 +8,7 @@ import time
 import re
 import math
 import base64
+import json
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from collections import Counter
@@ -14,10 +16,10 @@ from io import BytesIO
 
 from reportlab.lib import colors as rl_colors
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 import streamlit.components.v1 as components
 
@@ -27,7 +29,7 @@ if not hasattr(st, 'fragment'):
         return deco
     st.fragment = _fake_fragment
 
-st.set_page_config(page_title="E-Soccer Fifa Analytics | FIFAlgorithm", page_icon="🎮",
+st.set_page_config(page_title="E-Soccer Fifa Analytics | FIFAlgorithm", page_icon="🤖",
                    layout="wide", initial_sidebar_state="expanded")
 
 if 'modo_claro' not in st.session_state: st.session_state.modo_claro = False
@@ -36,9 +38,7 @@ if 'notif_alerta' not in st.session_state: st.session_state.notif_alerta = True
 if 'ultima_oportunidade' not in st.session_state: st.session_state.ultima_oportunidade = set()
 if 'page' not in st.session_state: st.session_state.page = 'jogos_dia'
 if '_fetch_errors' not in st.session_state: st.session_state['_fetch_errors'] = []
-# ── LOGIN ──
-if 'autenticado' not in st.session_state: st.session_state.autenticado = False
-if 'usuario_logado' not in st.session_state: st.session_state.usuario_logado = ''
+if '_profile_cache' not in st.session_state: st.session_state['_profile_cache'] = {}
 
 N_SIMULATIONS = 5000
 H2H_RECENCY = 0.85
@@ -88,7 +88,7 @@ EXTRA_COLUMNS = [
 
 
 # ============================================
-# CSS — DARK NEON THEME
+# CSS — DARK NEON THEME + LAYOUT V2 COMPACTO
 # ============================================
 def get_css(modo_claro=False):
     bg_card = "rgba(15,20,35,0.85)"
@@ -105,7 +105,8 @@ def get_css(modo_claro=False):
                    "radial-gradient(circle at 50% 50%, rgba(0,255,136,0.03), transparent 60%), #05070f")
     sidebar_bg = "linear-gradient(180deg, #070a14 0%, #05070f 100%)"
     sidebar_border = "rgba(0,245,255,0.18)"
-    return f"""<style>
+
+    base = f"""<style>
 * {{ font-family: 'Inter', -apple-system, sans-serif; }}
 .stApp {{ background: {bg_gradient}; }}
 
@@ -167,120 +168,6 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     box-shadow: 0 0 18px rgba(0,245,255,0.35) !important;
 }}
 
-.top-hero {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    margin-top: -15px !important;
-    margin-bottom: 14px;
-    background: linear-gradient(135deg, rgba(0,245,255,0.08) 0%, rgba(181,55,255,0.08) 100%);
-    border: 1px solid rgba(0,245,255,0.35);
-    border-radius: 12px;
-    box-shadow: 0 0 30px rgba(0,245,255,0.15), inset 0 0 30px rgba(0,245,255,0.03);
-}}
-.top-hero-left {{ display: flex; align-items: center; gap: 12px; min-width: 0; }}
-.top-hero-icon {{ font-size: 22px; flex-shrink: 0; filter: drop-shadow(0 0 10px rgba(0,245,255,0.6)); }}
-.top-hero-title {{
-    font-size: 15.5px; font-weight: 900; letter-spacing: -0.3px;
-    color: {txt}; white-space: nowrap;
-    text-shadow: 0 0 20px rgba(0,245,255,0.4);
-}}
-.top-hero-title b {{
-    background: linear-gradient(135deg, {accent}, {accent2});
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    font-weight: 900;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.5));
-}}
-.top-hero-sep {{ color: {txt_dim}; opacity: 0.5; font-weight: 600; margin: 0 2px; }}
-.top-hero-dev {{ font-size: 12.5px; font-weight: 700; color: {accent}; white-space: nowrap;
-                 text-shadow: 0 0 14px rgba(0,245,255,0.6); }}
-.top-hero-right {{ display: flex; align-items: center; gap: 8px; flex-shrink: 0; }}
-
-.pill-actions {{ margin-bottom: 14px; margin-top: 0; }}
-.pill-actions .stButton > button {{
-    background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.12)) !important;
-    border: 1px solid rgba(0,245,255,0.45) !important;
-    color: {accent} !important;
-    border-radius: 100px !important;
-    font-weight: 800 !important;
-    padding: 6px 18px !important;
-    font-size: 12.5px !important;
-    height: 32px !important;
-    transition: all 0.2s !important;
-    text-shadow: 0 0 10px rgba(0,245,255,0.5);
-}}
-.pill-actions .stButton > button:hover {{
-    background: linear-gradient(135deg, rgba(0,245,255,0.25), rgba(181,55,255,0.25)) !important;
-    box-shadow: 0 0 24px rgba(0,245,255,0.5) !important;
-    transform: translateY(-1px);
-}}
-.pill-actions .stButton > button[kind="primary"] {{
-    background: linear-gradient(135deg, {accent} 0%, {accent2} 100%) !important;
-    color: #05070f !important;
-    border: none !important;
-    box-shadow: 0 0 24px rgba(0,245,255,0.6), 0 0 50px rgba(181,55,255,0.35) !important;
-}}
-
-.stat-mini-row {{ display: flex; gap: 12px; margin-bottom: 14px; }}
-.stat-mini {{
-    position: relative;
-    display: flex; align-items: center; gap: 14px;
-    padding: 12px 18px;
-    background: linear-gradient(135deg, rgba(0,245,255,0.06) 0%, rgba(181,55,255,0.04) 100%);
-    border: 1px solid rgba(0,245,255,0.28);
-    border-radius: 14px;
-    flex: 1;
-    box-shadow: 0 0 24px rgba(0,245,255,0.08), inset 0 0 20px rgba(0,245,255,0.04);
-    transition: all 0.25s ease;
-    overflow: hidden;
-}}
-.stat-mini::before {{
-    content: '';
-    position: absolute;
-    top: 0; left: 0;
-    width: 4px; height: 100%;
-    background: linear-gradient(180deg, {accent}, {accent2});
-    box-shadow: 0 0 15px {accent};
-}}
-.stat-mini:hover {{
-    border-color: rgba(0,245,255,0.6);
-    box-shadow: 0 0 36px rgba(0,245,255,0.2), inset 0 0 25px rgba(0,245,255,0.08);
-    transform: translateY(-1px);
-}}
-.stat-mini .sm-icon {{
-    font-size: 26px; flex-shrink: 0;
-    width: 52px; height: 52px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(0,245,255,0.18), rgba(181,55,255,0.15));
-    border: 1px solid rgba(0,245,255,0.35);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 18px rgba(0,245,255,0.25), inset 0 0 15px rgba(0,245,255,0.06);
-    filter: drop-shadow(0 0 8px rgba(0,245,255,0.5));
-}}
-.stat-mini .sm-info {{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
-.stat-mini .sm-lbl {{
-    font-size: 10px; color: {txt_dim}; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 1.4px;
-    text-shadow: 0 0 6px rgba(0,245,255,0.15);
-}}
-.stat-mini .sm-val {{
-    font-size: 26px; font-weight: 900;
-    background: linear-gradient(135deg, #FFFFFF, {accent});
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-family: 'JetBrains Mono', 'Inter', monospace;
-    line-height: 1.05; letter-spacing: -1px;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.6));
-}}
-.stat-mini .sm-val.time {{
-    background: linear-gradient(135deg, #FFFFFF, {accent2});
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 12px rgba(181,55,255,0.6));
-}}
-
 ::-webkit-scrollbar {{ width: 8px; height: 8px; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
 ::-webkit-scrollbar-thumb {{ background: linear-gradient(180deg, {accent}, {accent2}); border-radius: 4px;
@@ -337,35 +224,6 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     font-size: 12px; font-weight: 900; color: #05070f;
     box-shadow: 0 0 16px rgba(0,245,255,0.5); }}
 
-.methodology-badge {{
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 11px; font-weight: 800; padding: 6px 16px;
-    border-radius: 100px;
-    background: linear-gradient(135deg, rgba(0,245,255,0.15), rgba(181,55,255,0.15));
-    border: 1px solid rgba(0,245,255,0.6);
-    color: #00f5ff;
-    letter-spacing: 0.5px;
-    box-shadow: 0 0 25px rgba(0,245,255,0.4), inset 0 0 15px rgba(0,245,255,0.1);
-    white-space: nowrap;
-    text-shadow: 0 0 10px rgba(0,245,255,0.8);
-    overflow: hidden;
-    text-overflow: ellipsis;
-}}
-.methodology-badge .icon {{
-    font-size: 14px;
-    filter: drop-shadow(0 0 6px #00f5ff);
-}}
-
-.status-dot {{ display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: 100px;
-    background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.4);
-    font-size: 11px; font-weight: 800; color: {accent3};
-    white-space: nowrap;
-    text-shadow: 0 0 10px rgba(0,255,136,0.6); }}
-.status-dot .dot {{ width: 6px; height: 6px; border-radius: 50%; background: {accent3};
-    box-shadow: 0 0 12px {accent3}; animation: pulse 2s infinite; }}
-@keyframes pulse {{ 0%,100% {{ opacity: 1; transform: scale(1); }} 50% {{ opacity: 0.5; transform: scale(1.2); }} }}
-
 .warning-banner {{
     background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
     padding: 12px 18px;
@@ -394,202 +252,28 @@ div[data-baseweb="input"] input {{ background: {bg_card2} !important; border: 1p
     border-radius: 8px !important; color: {txt} !important; font-size: 12.5px !important;
     padding: 6px 12px !important; min-height: 32px !important; }}
 
-.mc-list {{ display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }}
+.pbar {{ height: 8px; background: rgba(0,245,255,0.06); border-radius: 100px;
+    overflow: hidden; margin-top: 6px; }}
+.pbar > div {{ height: 100%; border-radius: 100px; }}
+.prog-row {{ display: grid; grid-template-columns: 70px 75px 1fr; gap: 14px;
+    align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0,245,255,0.06); }}
+.prog-lbl {{ font-size: 14px; font-weight: 700; color: {txt};
+    font-family: 'JetBrains Mono', monospace; }}
+.prog-val {{ font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 8px currentColor; }}
 
-.mc-header-row,
-.mc-row {{
-    display: grid;
-    grid-template-columns: 80px 380px 140px 130px 135px minmax(260px, 1.7fr);
-    gap: 8px;
-    align-items: stretch;
-}}
+.section-label {{ font-size: 12px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 1.2px; color: {accent}; margin: 14px 0 10px 0;
+    display: flex; align-items: center; gap: 8px;
+    text-shadow: 0 0 12px rgba(0,245,255,0.5); }}
+.section-label::before {{ content: ''; width: 3px; height: 14px;
+    background: linear-gradient(180deg, {accent}, {accent2}); border-radius: 2px;
+    box-shadow: 0 0 10px {accent}; }}
 
-.mc-header-row {{
-    padding: 7px 10px;
-    background: linear-gradient(135deg, rgba(0,245,255,0.1), rgba(181,55,255,0.06));
-    border: 1px solid rgba(0,245,255,0.5);
-    border-radius: 10px;
-    margin-bottom: 2px;
-    box-shadow: 0 0 20px rgba(0,245,255,0.15);
-}}
-.mc-hcell {{
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: {accent};
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2px 6px;
-    text-shadow: 0 0 10px rgba(0,245,255,0.6);
-}}
-
-.mc-row {{
-    padding: 7px 10px;
-    background: {bg_card};
-    border: 1px solid {border};
-    border-radius: 10px;
-    transition: all 0.15s;
-}}
-.mc-row:hover {{
-    border-color: rgba(0,245,255,0.55);
-    box-shadow: 0 0 24px rgba(0,245,255,0.2);
-}}
-.mc-row > * {{ min-width: 0; }}
-
-.mc-box {{
-    background: rgba(0,245,255,0.04);
-    border: 1px solid rgba(0,245,255,0.32);
-    border-radius: 10px;
-    padding: 6px 10px;
-    min-height: 62px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 3px;
-    box-shadow: inset 0 0 15px rgba(0,245,255,0.05);
-    transition: all 0.15s;
-    box-sizing: border-box;
-    overflow: hidden;
-}}
-.mc-box:hover {{
-    border-color: rgba(0,245,255,0.7);
-    box-shadow: inset 0 0 22px rgba(0,245,255,0.1), 0 0 20px rgba(0,245,255,0.15);
-}}
-
-.mc-hora-block {{ align-items: center; text-align: center; }}
-.mc-hora-block .h {{
-    font-size: 16px; font-weight: 900; color: {txt};
-    font-family: 'JetBrains Mono', monospace; line-height: 1;
-    letter-spacing: -0.5px;
-    text-shadow: 0 0 12px rgba(0,245,255,0.4);
-}}
-.mc-hora-block .l {{
-    font-size: 8px; color: {txt_dim}; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 0.4px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 100%;
-}}
-
-.mc-teams-box {{
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-align: center;
-    padding: 0 10px;
-}}
-
-.mc-team-side {{
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    flex: 1;
-}}
-.mc-team-side.left {{ justify-content: flex-end; }}
-.mc-team-side.right {{ justify-content: flex-start; }}
-
-.mc-team-side .name {{
-    font-size: 15px;
-    font-weight: 900;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    letter-spacing: 0.5px;
-    min-width: 0;
-}}
-
-.mc-team-side.left .name {{
-    background: linear-gradient(135deg, #FFFFFF, #00F5FF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 10px rgba(0, 245, 255, 0.6));
-}}
-
-.mc-team-side.right .name {{
-    background: linear-gradient(135deg, #FFFFFF, #B537FF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 10px rgba(181, 55, 255, 0.6));
-}}
-
-.mc-vs {{
-    font-size: 11px;
-    font-weight: 900;
-    color: #64748B;
-    letter-spacing: 1px;
-    padding: 3px 8px;
-    flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
-}}
-
-.mc-media {{ align-items: center; justify-content: center; }}
-.mc-media .vals {{
-    display: flex; align-items: center; gap: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-}}
-.mc-media .ht {{ font-weight: 700; color: #c77dff; text-shadow: 0 0 10px rgba(199,125,255,0.5); }}
-.mc-media .ft {{ font-weight: 900; color: {accent}; text-shadow: 0 0 12px rgba(0,245,255,0.5); }}
-.mc-media .sep {{ color: {txt_dim}; opacity: 0.4; font-weight: 600; }}
-
-.mc-status {{
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    gap: 4px;
-}}
-.mc-status .top {{
-    font-size: 16px; font-weight: 900;
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: -0.3px;
-    line-height: 1.15;
-    text-shadow: 0 0 14px currentColor;
-}}
-.mc-status .sub {{
-    font-size: 11px; font-weight: 900;
-    text-transform: uppercase; letter-spacing: 0.6px;
-    opacity: 0.95;
-    text-shadow: 0 0 10px currentColor;
-}}
-
-.mc-player-box {{ gap: 6px; }}
-.mc-player-box .phdr {{
-    font-size: 11px; color: {accent}; font-weight: 900;
-    text-transform: uppercase; letter-spacing: 1.1px; text-align: center;
-    padding-bottom: 4px; margin: 0;
-    border-bottom: 1px solid rgba(0,245,255,0.22);
-    text-shadow: 0 0 10px rgba(0,245,255,0.5);
-}}
-.mc-pnames {{
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-    margin: 0;
-}}
-.mc-pnames .pn {{
-    font-size: 13.5px; font-weight: 900;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-align: center; letter-spacing: -0.2px; line-height: 1.15;
-}}
-.mc-pstats {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
-.mc-pcol {{ display: flex; flex-direction: column; gap: 3px; }}
-.mc-pstat {{
-    display: flex; justify-content: space-between; align-items: center;
-    gap: 5px; font-size: 11.5px; line-height: 1.25;
-}}
-.mc-pstat .lbl {{ color: {txt_dim}; font-weight: 700;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 11px; }}
-.mc-pstat .val {{ font-weight: 900;
-    font-family: 'JetBrains Mono', monospace; font-size: 13.5px; flex-shrink: 0;
-    text-shadow: 0 0 10px currentColor; }}
+[data-testid="stDataFrame"] {{ background: {bg_card2}; border-radius: 12px; border: 1px solid {border}; }}
+.stAlert {{ background: {bg_card2} !important; border-radius: 10px !important;
+    border: 1px solid {border} !important; font-size: 13px !important;
+    padding: 6px 12px !important; }}
 
 .streamlit-expanderHeader, details > summary {{
     background: rgba(20,25,45,0.5) !important;
@@ -612,41 +296,98 @@ details[open] > summary {{
 }}
 details[open] > summary svg {{ color: {accent} !important; fill: {accent} !important; }}
 
-.section-label {{ font-size: 12px; font-weight: 900; text-transform: uppercase;
-    letter-spacing: 1.2px; color: {accent}; margin: 14px 0 10px 0;
-    display: flex; align-items: center; gap: 8px;
-    text-shadow: 0 0 12px rgba(0,245,255,0.5); }}
-.section-label::before {{ content: ''; width: 3px; height: 14px;
-    background: linear-gradient(180deg, {accent}, {accent2}); border-radius: 2px;
-    box-shadow: 0 0 10px {accent}; }}
-
-.pbar {{ height: 8px; background: rgba(0,245,255,0.06); border-radius: 100px;
-    overflow: hidden; margin-top: 6px; }}
-.pbar > div {{ height: 100%; border-radius: 100px; }}
-.prog-row {{ display: grid; grid-template-columns: 70px 75px 1fr; gap: 14px;
-    align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0,245,255,0.06); }}
-.prog-lbl {{ font-size: 14px; font-weight: 700; color: {txt};
-    font-family: 'JetBrains Mono', monospace; }}
-.prog-val {{ font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
-    text-shadow: 0 0 8px currentColor; }}
+.h2h-card {{
+    background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.95));
+    border: 1px solid rgba(0,245,255,0.3);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 30px rgba(0,245,255,0.1), inset 0 0 30px rgba(0,245,255,0.02);
+}}
+.h2h-header {{
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid rgba(0,245,255,0.15);
+    padding-bottom: 12px; margin-bottom: 14px;
+}}
+.h2h-team {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
+.h2h-team.right {{ align-items: flex-end; text-align: right; }}
+.h2h-team-name {{
+    font-size: 20px; font-weight: 900; color: #f0f5ff;
+    letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;
+}}
+.h2h-team.right .h2h-team-name {{ flex-direction: row-reverse; }}
+.h2h-team-form {{ display: flex; gap: 4px; }}
+.h2h-match-info {{
+    text-align: center; display: flex;
+    flex-direction: column; gap: 4px; padding: 0 20px;
+}}
+.h2h-match-info .vs {{
+    font-size: 24px; font-weight: 900; color: #00f5ff;
+    text-shadow: 0 0 14px rgba(0,245,255,0.6);
+}}
+.h2h-match-info .league {{
+    font-size: 10px; color: #7a89a8; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1px;
+}}
+.h2h-ppj-matchup {{
+    display: flex; justify-content: center; align-items: center;
+    gap: 12px; margin-top: 4px;
+    padding: 6px 14px; border-radius: 100px;
+    background: rgba(0,245,255,0.06);
+    border: 1px solid rgba(0,245,255,0.2);
+    font-family: 'JetBrains Mono', monospace;
+}}
+.h2h-ppj-matchup .val {{ font-size: 15px; font-weight: 900; }}
+.h2h-ppj-matchup .sep {{ color: #7a89a8; font-weight: 700; }}
+.h2h-table {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
+.h2h-col {{ display: flex; flex-direction: column; gap: 8px; }}
+.h2h-row {{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid rgba(0,245,255,0.05);
+}}
+.h2h-row:last-child {{ border-bottom: none; }}
+.h2h-row-label {{
+    font-size: 10.5px; color: #7a89a8; font-weight: 700;
+    width: 105px; flex-shrink: 0;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}}
+.h2h-row-seq {{
+    display: flex; gap: 4px; flex: 1; justify-content: center;
+    flex-wrap: nowrap; overflow: hidden;
+}}
+.h2h-seq-item {{
+    width: 22px; height: 22px; border-radius: 6px;
+    font-size: 10.5px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,245,255,0.08);
+    border: 1px solid rgba(0,245,255,0.2);
+    color: #f0f5ff;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
+}}
+.h2h-seq-item.highlight {{
+    background: rgba(0,255,136,0.15);
+    border-color: rgba(0,255,136,0.5);
+    color: #00ff88;
+}}
+.h2h-seq-item.ht-hl {{
+    background: rgba(181,55,255,0.15);
+    border-color: rgba(181,55,255,0.5);
+    color: #c77dff;
+}}
+.h2h-row-avg {{
+    font-size: 13px; font-weight: 900; color: #00f5ff;
+    font-family: 'JetBrains Mono', monospace;
+    width: 42px; text-align: right; flex-shrink: 0;
+}}
+.h2h-row-avg.ht {{ color: #b537ff; }}
+.h2h-row-avg.ft {{ color: #00ff88; }}
 
 .insight-box {{ background: linear-gradient(90deg, rgba(255,214,0,0.1) 0%, rgba(255,214,0,0.02) 100%);
     padding: 12px 16px; border-radius: 10px; border-left: 3px solid #ffd600;
     font-size: 14px; margin-top: 10px; color: {txt}; line-height: 1.7;
     box-shadow: 0 0 20px rgba(255,214,0,0.1); }}
-
-[data-testid="stDataFrame"] {{ background: {bg_card2}; border-radius: 12px; border: 1px solid {border}; }}
-.stAlert {{ background: {bg_card2} !important; border-radius: 10px !important;
-    border: 1px solid {border} !important; font-size: 13px !important;
-    padding: 6px 12px !important; }}
-.stat-card {{ background: {bg_card2}; padding: 14px 12px; border-radius: 10px;
-    border: 1px solid {border}; text-align: center; }}
-.stat-card .sc-icon {{ font-size: 22px; }}
-.stat-card .sc-val {{ font-size: 24px; font-weight: 900; margin-top: 4px;
-    color: {accent}; font-family: 'JetBrains Mono', monospace;
-    text-shadow: 0 0 14px rgba(0,245,255,0.5); }}
-.stat-card .sc-label {{ font-size: 10.5px; color: {txt_dim}; text-transform: uppercase;
-    letter-spacing: 1px; margin-top: 4px; font-weight: 700; }}
 
 .league-card {{ padding: 14px 18px; margin: 8px 0; border-radius: 12px;
     background: {bg_card2}; border: 1px solid {border}; border-left: 3px solid {accent};
@@ -664,18 +405,6 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     0% {{ box-shadow: 0 0 40px rgba(0,255,136,0.35), inset 0 0 40px rgba(0,255,136,0.08); }}
     100% {{ box-shadow: 0 0 60px rgba(0,255,136,0.6), inset 0 0 50px rgba(0,255,136,0.15); }}
 }}
-.league-card-best::before {{
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(0,255,136,0.15), transparent);
-    animation: shine 3s infinite;
-}}
-@keyframes shine {{
-    0% {{ left: -100%; }}
-    100% {{ left: 100%; }}
-}}
 .best-badge {{
     display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 14px; border-radius: 100px;
@@ -684,11 +413,6 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     font-size: 11px; font-weight: 900;
     letter-spacing: 0.6px; text-transform: uppercase;
     box-shadow: 0 0 20px rgba(0,255,136,0.6);
-    animation: badge-pulse 2s ease-in-out infinite;
-}}
-@keyframes badge-pulse {{
-    0%,100% {{ transform: scale(1); }}
-    50% {{ transform: scale(1.05); }}
 }}
 .best-reason {{
     margin-top: 12px;
@@ -717,407 +441,641 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
     box-shadow: 0 0 15px rgba(181,55,255,0.5); }}
 
-.badge-ht-heavy {{ 
-    background: linear-gradient(135deg, #ff8c00, #ff2e88); 
-    color: #fff; padding: 4px 12px; border-radius: 100px; 
-    font-size: 10.5px; font-weight: 900; 
-    box-shadow: 0 0 15px rgba(255,140,0,0.5); 
+.badge-ht-heavy {{ background: linear-gradient(135deg, #ff8c00, #ff2e88); color: #fff;
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
+    box-shadow: 0 0 15px rgba(255,140,0,0.5); }}
+.badge-ft-heavy {{ background: linear-gradient(135deg, #00f5ff, #0099cc); color: #05070f;
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
+    box-shadow: 0 0 15px rgba(0,245,255,0.5); }}
+.badge-balanced {{ background: linear-gradient(135deg, #7a89a8, #4a5568); color: #fff;
+    padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
+    box-shadow: 0 0 15px rgba(122,137,168,0.5); }}
+.dual-bar {{ display: flex; height: 8px; border-radius: 100px;
+    overflow: hidden; margin-top: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.3); }}
+.dual-bar .ht {{ background: linear-gradient(90deg, #ff8c00, #ff2e88);
+    box-shadow: 0 0 10px rgba(255,140,0,0.5); }}
+.dual-bar .ft {{ background: linear-gradient(90deg, #00f5ff, #b537ff);
+    box-shadow: 0 0 10px rgba(0,245,255,0.5); }}
+
+.rank-list {{ display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }}
+.rank-header, .rank-row {{
+    display: grid; gap: 6px; align-items: center;
+    padding: 8px 12px; border-radius: 8px;
 }}
-.badge-ft-heavy {{ 
-    background: linear-gradient(135deg, #00f5ff, #0099cc); 
-    color: #05070f; padding: 4px 12px; border-radius: 100px; 
-    font-size: 10.5px; font-weight: 900; 
-    box-shadow: 0 0 15px rgba(0,245,255,0.5); 
+.rank-header.r1, .rank-row.r1 {{
+    grid-template-columns: 44px minmax(120px, 1.2fr) 42px minmax(200px, 2fr) 60px 60px 60px 60px 60px; }}
+.rank-header.r2, .rank-row.r2 {{
+    grid-template-columns: 44px minmax(140px, 1.5fr) 42px 90px 90px 90px 90px; }}
+.rank-header.r3, .rank-row.r3 {{
+    grid-template-columns: 44px minmax(130px, 1.4fr) 42px 75px 75px 75px 75px 75px 75px 85px; }}
+.rank-header.r4, .rank-row.r4 {{
+    grid-template-columns: 44px minmax(140px, 1.5fr) 42px 80px 120px 120px; }}
+.rank-header {{
+    background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
+    border: 1px solid rgba(0,245,255,0.4);
+    box-shadow: 0 0 15px rgba(0,245,255,0.1);
+    padding: 10px 12px;
 }}
-.badge-balanced {{ 
-    background: linear-gradient(135deg, #7a89a8, #4a5568); 
-    color: #fff; padding: 4px 12px; border-radius: 100px; 
-    font-size: 10.5px; font-weight: 900; 
-    box-shadow: 0 0 15px rgba(122,137,168,0.5); 
+.rank-hcell {{
+    font-size: 10px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    text-align: center;
+    text-shadow: 0 0 8px rgba(0,245,255,0.5);
+    white-space: nowrap;
 }}
-.dual-bar {{ 
-    display: flex; height: 8px; border-radius: 100px; 
-    overflow: hidden; margin-top: 10px; 
-    border: 1px solid rgba(255,255,255,0.1); 
-    background: rgba(0,0,0,0.3);
+.rank-row {{
+    background: rgba(15,20,35,0.85);
+    border: 1px solid rgba(0,245,255,0.15);
+    transition: all 0.15s;
 }}
-.dual-bar .ht {{ 
-    background: linear-gradient(90deg, #ff8c00, #ff2e88); 
-    box-shadow: 0 0 10px rgba(255,140,0,0.5);
+.rank-row:hover {{
+    border-color: rgba(0,245,255,0.5);
+    box-shadow: 0 0 18px rgba(0,245,255,0.15);
+    background: rgba(20,28,50,0.9);
 }}
-.dual-bar .ft {{ 
-    background: linear-gradient(90deg, #00f5ff, #b537ff); 
-    box-shadow: 0 0 10px rgba(0,245,255,0.5);
+.rank-pos {{ font-size: 15px; font-weight: 900; text-align: center; }}
+.rank-name {{
+    font-size: 13px; font-weight: 900; color: #f0f5ff;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-shadow: 0 0 8px rgba(0,245,255,0.3);
+}}
+.rank-num {{
+    font-size: 12.5px; font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+    text-align: center;
+    color: #f0f5ff;
+}}
+.rank-form {{ display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; }}
+
+.lp-market-card {{
+    position: relative; padding: 16px 18px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.05) 0%, rgba(181,55,255,0.04) 100%);
+    border: 1px solid rgba(0,245,255,0.3);
+    box-shadow: 0 0 24px rgba(0,245,255,0.08), inset 0 0 20px rgba(0,245,255,0.03);
+    transition: all 0.25s ease; overflow: hidden; margin-bottom: 10px;
+}}
+.lp-market-card:hover {{
+    border-color: rgba(0,245,255,0.6);
+    box-shadow: 0 0 36px rgba(0,245,255,0.2), inset 0 0 25px rgba(0,245,255,0.08);
+    transform: translateY(-2px);
+}}
+.lp-market-card .lp-title {{
+    font-size: 13px; font-weight: 900; color: #f0f5ff;
+    text-transform: uppercase; letter-spacing: 1px;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}}
+.lp-market-card .lp-row {{
+    display: flex; justify-content: space-between;
+    font-size: 12.5px; padding: 4px 0; color: #7a89a8;
+}}
+.lp-market-card .lp-row b {{
+    color: #f0f5ff; font-family: 'JetBrains Mono', monospace; font-weight: 800;
 }}
 
 #MainMenu, footer {{ visibility: hidden; }}
 header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 
-.top-actions-row {{ display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }}
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT V2 — HERO / NAV / INFO CARDS / MATCH ROWS / FOOTER
+   ═══════════════════════════════════════════════════════════ */
+.hero-v2 {{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 28px; margin-bottom: 16px;
+    background: linear-gradient(135deg, rgba(5,8,20,0.98) 0%, rgba(10,15,30,0.98) 100%);
+    border: 1.5px solid rgba(0,245,255,0.4);
+    border-radius: 14px;
+    box-shadow: 0 0 50px rgba(0,245,255,0.15), inset 0 0 50px rgba(0,245,255,0.03);
+    position: relative; overflow: hidden;
+}}
+.hero-v2::before {{
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #00f5ff, #b537ff, #00f5ff, transparent);
+    box-shadow: 0 0 25px rgba(0,245,255,0.9);
+}}
+.hero-v2::after {{
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(181,55,255,0.6), transparent);
+}}
+.hero-v2-left {{ display: flex; align-items: center; gap: 22px; }}
+.hero-v2-logo {{
+    width: 76px; height: 76px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 52px;
+    filter: drop-shadow(0 0 25px rgba(0,245,255,0.9)) drop-shadow(0 0 45px rgba(181,55,255,0.5));
+    animation: heroLogoPulse 3s ease-in-out infinite;
+}}
+@keyframes heroLogoPulse {{
+    0%,100% {{ filter: drop-shadow(0 0 25px rgba(0,245,255,0.9)); transform: scale(1); }}
+    50%     {{ filter: drop-shadow(0 0 35px rgba(181,55,255,1)); transform: scale(1.03); }}
+}}
+.hero-v2-title-block {{ display: flex; flex-direction: column; gap: 8px; }}
+.hero-v2-title {{
+    font-size: 36px; font-weight: 900;
+    letter-spacing: -0.8px; color: #f0f5ff;
+    text-shadow: 0 0 35px rgba(0,245,255,0.5);
+    line-height: 1; font-style: italic;
+    display: flex; align-items: center; gap: 12px;
+}}
+.hero-v2-title .bolt {{
+    color: #00f5ff; filter: drop-shadow(0 0 15px #00f5ff); font-style: normal;
+}}
+.hero-v2-accent {{
+    background: linear-gradient(135deg, #00f5ff 0%, #b537ff 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 22px rgba(181,55,255,0.8));
+}}
+.hero-v2-tagline {{
+    display: flex; align-items: center; gap: 12px;
+    font-size: 11.5px; font-weight: 700;
+}}
+.hero-v2-at {{
+    color: #00f5ff; font-weight: 900; font-size: 13px;
+    text-shadow: 0 0 14px rgba(0,245,255,0.9);
+}}
+.hero-v2-tag-sep {{ color: #3a4a6a; font-size: 14px; }}
+.hero-v2-tag-text {{ color: #7a89a8; letter-spacing: 1.2px; }}
+.hero-v2-right {{ display: flex; align-items: center; gap: 22px; }}
+.hero-v2-right-text {{ text-align: right; }}
+.hero-v2-rl1 {{
+    font-size: 13.5px; font-weight: 800;
+    color: #f0f5ff; letter-spacing: 2px;
+    text-shadow: 0 0 12px rgba(0,245,255,0.3);
+}}
+.hero-v2-rl2 {{
+    font-size: 17px; font-weight: 900;
+    letter-spacing: 2px; color: #f0f5ff; margin-top: 2px;
+}}
+.hero-v2-hl {{
+    background: linear-gradient(135deg, #00f5ff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 18px rgba(0,245,255,0.8));
+}}
+.hero-v2-badge {{
+    width: 78px; height: 78px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.98));
+    border: 2px solid rgba(0,245,255,0.55);
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08);
+    animation: badgePulse 3s ease-in-out infinite;
+    overflow: hidden;
+    flex-shrink: 0;
+}}
+.hero-v2-badge::before {{
+    content: '';
+    position: absolute;
+    inset: -50%;
+    background: conic-gradient(from 0deg, transparent, #00f5ff, transparent, #b537ff, transparent);
+    animation: badgeRotate 4s linear infinite;
+    opacity: 0.45;
+    z-index: 0;
+}}
+.hero-v2-badge::after {{
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(8,12,25,0.99), rgba(15,20,40,0.99));
+    z-index: 1;
+}}
+.hero-v2-badge svg {{
+    position: relative;
+    z-index: 2;
+    width: 44px; height: 44px;
+    filter: drop-shadow(0 0 12px rgba(0,245,255,0.9));
+}}
+.hero-v2-badge .badge-emoji {{
+    position: relative; z-index: 2;
+    font-size: 40px;
+    filter: drop-shadow(0 0 14px rgba(0,245,255,0.9));
+}}
+@keyframes badgePulse {{
+    0%,100% {{ box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08); }}
+    50%     {{ box-shadow: 0 0 48px rgba(181,55,255,0.75), inset 0 0 30px rgba(181,55,255,0.18); }}
+}}
+@keyframes badgeRotate {{
+    to {{ transform: rotate(360deg); }}
+}}
+
+.info-v2-row {{
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px; margin-bottom: 14px;
+}}
+.info-v2-card {{
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(15,20,40,0.92) 100%);
+    border: 1.5px solid rgba(0,245,255,0.35);
+    border-radius: 12px;
+    box-shadow: 0 0 28px rgba(0,245,255,0.1), inset 0 0 22px rgba(0,245,255,0.03);
+    position: relative; overflow: hidden;
+}}
+.info-v2-card::before {{
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, #00f5ff, #b537ff);
+    box-shadow: 0 0 14px #00f5ff;
+}}
+.info-v2-icon {{
+    width: 46px; height: 46px; border-radius: 11px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.18), rgba(181,55,255,0.14));
+    border: 1px solid rgba(0,245,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+    filter: drop-shadow(0 0 12px rgba(0,245,255,0.6));
+}}
+.info-v2-content {{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
+.info-v2-label {{
+    font-size: 9.5px; font-weight: 900; color: #7a89a8;
+    text-transform: uppercase; letter-spacing: 1.6px;
+}}
+.info-v2-value {{
+    font-size: 26px; font-weight: 900;
+    background: linear-gradient(135deg, #ffffff, #00f5ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1; letter-spacing: -0.5px;
+    filter: drop-shadow(0 0 14px rgba(0,245,255,0.7));
+}}
+.info-v2-value.purple {{
+    background: linear-gradient(135deg, #ffffff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 14px rgba(181,55,255,0.7));
+}}
+.info-v2-sub {{
+    font-size: 10px; font-weight: 800; color: #7a89a8;
+    letter-spacing: 1px; margin-top: 2px;
+}}
+.info-v2-prob-text {{
+    font-size: 13px; font-weight: 800; color: #00f5ff;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 12px rgba(0,245,255,0.6);
+    letter-spacing: 0.3px;
+}}
+.info-v2-online {{
+    margin-left: auto;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 14px;
+    background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.45);
+    border-radius: 100px;
+    font-size: 10px; font-weight: 900;
+    color: #00ff88; letter-spacing: 1.2px;
+    text-shadow: 0 0 12px rgba(0,255,136,0.7);
+}}
+.info-v2-dot {{
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 12px #00ff88;
+    animation: pulse 2s infinite;
+}}
+@keyframes pulse {{
+    0%,100% {{ opacity: 1; transform: scale(1); }}
+    50%     {{ opacity: 0.5; transform: scale(1.2); }}
+}}
+
+/* ═══ MATCH ROWS — LAYOUT COMPACTO V2.2 ═══ */
+.match-v2-header, .match-v2-row {{
+    display: grid;
+    grid-template-columns: 135px 320px 115px 130px 130px minmax(400px, 1fr);
+    gap: 6px;
+}}
+.match-v2-header {{
+    padding: 9px 10px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.1), rgba(181,55,255,0.06));
+    border: 1.5px solid rgba(0,245,255,0.45);
+    border-radius: 10px; margin-bottom: 5px;
+    box-shadow: 0 0 24px rgba(0,245,255,0.14);
+}}
+.mvh-cell {{
+    font-size: 10px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 0.9px;
+    text-align: center;
+    display: flex; align-items: center; justify-content: center;
+    text-shadow: 0 0 12px rgba(0,245,255,0.7);
+}}
+.match-v2-row {{
+    padding: 7px 10px;
+    background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(12,18,35,0.88) 100%);
+    border: 1.5px solid rgba(0,245,255,0.22);
+    border-radius: 10px; margin-bottom: 5px;
+    transition: all 0.2s; align-items: stretch;
+}}
+.match-v2-row:hover {{
+    border-color: rgba(0,245,255,0.65);
+    box-shadow: 0 0 32px rgba(0,245,255,0.22);
+    transform: translateY(-1px);
+}}
+.mv-box {{
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 6px 9px; border-radius: 8px;
+    background: rgba(0,245,255,0.03);
+    border: 1px solid rgba(0,245,255,0.15);
+    min-height: 54px; overflow: hidden;
+}}
+.mv-time {{ align-items: center; text-align: center; }}
+.mv-time-val {{
+    font-size: 17px; font-weight: 900; color: #f0f5ff;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 16px rgba(0,245,255,0.55);
+    line-height: 1; letter-spacing: -0.5px;
+}}
+.mv-league-tag {{
+    font-size: 8.5px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    background: rgba(0,245,255,0.1);
+    border: 1px solid rgba(0,245,255,0.35);
+    padding: 2px 8px; border-radius: 100px; margin-top: 4px;
+    white-space: nowrap; text-shadow: 0 0 10px rgba(0,245,255,0.7);
+    display: inline-block;
+}}
+.mv-teams {{
+    flex-direction: row !important;
+    align-items: center; justify-content: space-between;
+    gap: 6px; padding: 6px 14px;
+}}
+.mv-team {{ display: flex; align-items: center; gap: 9px; min-width: 0; }}
+.mv-crest {{
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, #1a2540, #0f1424);
+    border: 1.5px solid rgba(0,245,255,0.45);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 900; color: #00f5ff;
+    box-shadow: 0 0 14px rgba(0,245,255,0.35);
+    flex-shrink: 0; text-shadow: 0 0 10px rgba(0,245,255,0.9);
+}}
+.mv-crest.away {{
+    color: #b537ff; border-color: rgba(181,55,255,0.45);
+    box-shadow: 0 0 14px rgba(181,55,255,0.35);
+}}
+.mv-team-name {{
+    font-size: 14px; font-weight: 900; color: #f0f5ff;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: 0.3px;
+}}
+.mv-team.left .mv-team-name {{
+    background: linear-gradient(135deg, #ffffff, #00f5ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 8px rgba(0,245,255,0.5));
+}}
+.mv-team.right .mv-team-name {{
+    background: linear-gradient(135deg, #ffffff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 8px rgba(181,55,255,0.5));
+}}
+.mv-vs {{
+    font-size: 9px; font-weight: 900; color: #3a4a6a;
+    padding: 3px 8px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 100px; flex-shrink: 0;
+}}
+.mv-media {{ align-items: center; justify-content: center; text-align: center; }}
+.mv-media-vals {{
+    display: flex; flex-direction: column; gap: 2px;
+    font-family: 'JetBrains Mono', monospace;
+    align-items: center; justify-content: center;
+}}
+.mv-media-vals .ht,
+.mv-media-vals .ft {{
+    font-size: 14px; font-weight: 900;
+    line-height: 1.15; letter-spacing: -0.3px;
+}}
+.mv-media-vals .ht {{
+    color: #b537ff;
+    text-shadow: 0 0 12px rgba(181,55,255,0.6);
+}}
+.mv-media-vals .ft {{
+    color: #00f5ff;
+    text-shadow: 0 0 14px rgba(0,245,255,0.6);
+}}
+.mv-bet {{
+    align-items: center; justify-content: center;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    padding: 6px 8px !important;
+}}
+.mv-bet.green {{
+    background: linear-gradient(135deg, rgba(0,255,136,0.16), rgba(0,255,136,0.05));
+    border-color: rgba(0,255,136,0.55);
+    box-shadow: 0 0 18px rgba(0,255,136,0.22);
+}}
+.mv-bet.red {{
+    background: linear-gradient(135deg, rgba(255,46,136,0.16), rgba(255,46,136,0.05));
+    border-color: rgba(255,46,136,0.55);
+    box-shadow: 0 0 18px rgba(255,46,136,0.22);
+}}
+.mv-bet.cyan {{
+    background: linear-gradient(135deg, rgba(0,245,255,0.16), rgba(0,245,255,0.05));
+    border-color: rgba(0,245,255,0.55);
+    box-shadow: 0 0 18px rgba(0,245,255,0.22);
+}}
+.mv-bet.yellow {{
+    background: linear-gradient(135deg, rgba(255,214,0,0.16), rgba(255,214,0,0.05));
+    border-color: rgba(255,214,0,0.55);
+    box-shadow: 0 0 18px rgba(255,214,0,0.22);
+}}
+.mv-bet-lbl {{ display: none !important; }}
+.mv-bet-val {{
+    font-size: 18px; font-weight: 900;
+    letter-spacing: 0.3px; line-height: 1.15;
+    text-align: center;
+}}
+.mv-bet-line {{
+    font-size: 11.5px; font-weight: 900;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-top: 4px; opacity: 0.95;
+    white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
+}}
+.mv-bet.green .mv-bet-val {{ color: #00ff88; text-shadow: 0 0 16px rgba(0,255,136,0.8); }}
+.mv-bet.red   .mv-bet-val {{ color: #ff2e88; text-shadow: 0 0 16px rgba(255,46,136,0.8); }}
+.mv-bet.cyan  .mv-bet-val {{ color: #00f5ff; text-shadow: 0 0 16px rgba(0,245,255,0.8); }}
+.mv-bet.yellow .mv-bet-val {{ color: #ffd600; text-shadow: 0 0 16px rgba(255,214,0,0.8); }}
+.mv-bet.green .mv-bet-line {{ color: #00ff88; text-shadow: 0 0 10px rgba(0,255,136,0.7); }}
+.mv-bet.red   .mv-bet-line {{ color: #ff2e88; text-shadow: 0 0 10px rgba(255,46,136,0.7); }}
+.mv-bet.cyan  .mv-bet-line {{ color: #00f5ff; text-shadow: 0 0 10px rgba(0,245,255,0.7); }}
+.mv-bet.yellow .mv-bet-line {{ color: #ffd600; text-shadow: 0 0 10px rgba(255,214,0,0.7); }}
+
+/* ═══ OVER INDIVIDUAL — COM GOLS ESPERADOS EM DESTAQUE ═══ */
+.mv-over {{ padding: 8px 14px; }}
+.mv-over-hdr {{
+    font-size: 10px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 1px;
+    text-align: center; padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0,245,255,0.22);
+    margin-bottom: 8px;
+    text-shadow: 0 0 12px rgba(0,245,255,0.7);
+}}
+.mv-over-cols {{
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    max-width: 540px;
+    margin: 0 auto;
+}}
+.mv-over-team {{
+    display: flex; flex-direction: column; gap: 6px;
+    min-width: 0;
+}}
+.mv-over-pname {{
+    font-size: 15px; font-weight: 900;
+    text-align: center; letter-spacing: 0.4px;
+    white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(0,245,255,0.2);
+    text-shadow: 0 0 14px currentColor;
+}}
+.mv-over-exp {{
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 4px;
+    margin: 2px 0 6px 0;
+    padding: 10px 12px 8px 12px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
+    border: 1.5px solid rgba(0,245,255,0.5);
+    box-shadow: 0 0 20px rgba(0,245,255,0.28), inset 0 0 15px rgba(0,245,255,0.05);
+    position: relative;
+    overflow: hidden;
+}}
+.mv-over-exp::before {{
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #00f5ff, #b537ff, #00f5ff, transparent);
+    opacity: 0.85;
+}}
+.mv-over-exp-lbl {{
+    font-size: 8.5px; color: #00f5ff;
+    font-weight: 900; text-transform: uppercase;
+    letter-spacing: 1.4px;
+    text-shadow: 0 0 10px rgba(0,245,255,0.7);
+    text-align: center;
+}}
+.mv-over-exp-main {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 30px; font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1.5px;
+    text-shadow: 0 0 22px currentColor;
+    text-align: center;
+    margin: 1px 0;
+}}
+.mv-over-exp-samples {{
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 3px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(0,245,255,0.2);
+}}
+.mv-over-exp-group {{
+    display: flex; align-items: center; gap: 4px;
+    flex-shrink: 0;
+}}
+.mv-over-exp-smp {{
+    font-size: 8.5px; font-weight: 900;
+    letter-spacing: 0.4px;
+    padding: 1px 6px;
+    border-radius: 100px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    text-transform: uppercase;
+}}
+.mv-over-exp-smp.high {{
+    color: #00ff88;
+    background: rgba(0,255,136,0.15);
+    border: 1px solid rgba(0,255,136,0.45);
+    text-shadow: 0 0 6px rgba(0,255,136,0.7);
+}}
+.mv-over-exp-smp.medium {{
+    color: #ffd600;
+    background: rgba(255,214,0,0.15);
+    border: 1px solid rgba(255,214,0,0.45);
+    text-shadow: 0 0 6px rgba(255,214,0,0.7);
+}}
+.mv-over-exp-smp.low {{
+    color: #ff2e88;
+    background: rgba(255,46,136,0.15);
+    border: 1px solid rgba(255,46,136,0.45);
+    text-shadow: 0 0 6px rgba(255,46,136,0.7);
+}}
+.mv-over-exp-smp.none {{
+    color: #7a89a8;
+    background: rgba(122,137,168,0.12);
+    border: 1px solid rgba(122,137,168,0.3);
+}}
+.mv-over-exp-val-mini {{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 900; font-size: 11.5px;
+    letter-spacing: -0.3px;
+    text-shadow: 0 0 8px currentColor;
+}}
+.mv-over-exp-sep {{
+    color: rgba(0,245,255,0.35);
+    font-weight: 900;
+    font-size: 12px;
+    flex-shrink: 0;
+}}
+.mv-over-exp-trend {{
+    font-size: 13px;
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 6px currentColor);
+}}
+.mv-over-stat {{
+    display: flex; justify-content: space-between;
+    align-items: center; gap: 10px;
+    font-size: 12px; line-height: 1.5;
+    padding: 2px 0;
+}}
+.mv-over-lbl {{
+    font-size: 11px; color: #8b9bb8;
+    font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+}}
+.mv-over-pct {{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 900; font-size: 15px;
+    text-shadow: 0 0 10px currentColor;
+    flex-shrink: 0;
+}}
+
+.footer-v2 {{
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 22px; margin-top: 22px;
+    background: linear-gradient(135deg, rgba(5,8,20,0.92), rgba(10,15,30,0.92));
+    border-top: 1.5px solid rgba(0,245,255,0.35);
+    border-radius: 10px;
+    box-shadow: 0 -10px 40px rgba(0,245,255,0.08);
+}}
+.footer-v2-left {{
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 900; color: #f0f5ff;
+    letter-spacing: 1.2px; text-transform: uppercase;
+}}
+.footer-v2-accent {{
+    background: linear-gradient(135deg, #00f5ff, #b537ff);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 12px rgba(0,245,255,0.7));
+}}
+.footer-v2-right {{
+    display: flex; align-items: center; gap: 14px;
+    font-size: 10.5px; font-weight: 800; color: #7a89a8;
+    letter-spacing: 1.8px; text-transform: uppercase;
+}}
+.footer-v2-right .dot-sep {{ color: #00f5ff; font-size: 14px; }}
+
+.nav-v2 {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }}
+.nav-v2-6 {{ grid-template-columns: repeat(6, 1fr); }}
+
+.pill-actions {{ margin-bottom: 14px; margin-top: 0; }}
 </style>"""
+    return base
+
 
 st.markdown(get_css(st.session_state.modo_claro), unsafe_allow_html=True)
-
-
-# ============================================
-# LOGIN — Autenticação com chave universal
-# ============================================
-# Fallback local (só usado se rodar sem secrets.toml)
-USERS = {
-    "vagner": "esoccer2025",
-}
-
-# ── Imagem da tela de login ──
-# Pode ser URL (https://...) ou caminho local (ex: "assets/login_player.jpg")
-LOGIN_IMAGE = "https://s2-cbn.glbimg.com/QCS2_v6drT3WBe0Q5DpV1Y-GWSo=/0x0:1080x1350/888x0/smart/filters:strip_icc()/i.s3.glbimg.com/v1/AUTH_d975fad146a14bbfad9e763717b09688/internal_photos/bs/2026/B/O/WhSomnRsqSMLQV6czXRQ/snapinsta.to-750686613-18194490682373884-7089288799671511122-n.jpg"
-
-
-def check_credentials(user, pwd):
-    """Chave universal via st.secrets. Fallback pra USERS local."""
-    # 1) Master key universal
-    try:
-        master = st.secrets.get("access", {}).get("master_key", "")
-        if master and pwd == master:
-            return True
-    except Exception:
-        pass
-    # 2) Usuários individuais
-    try:
-        users = dict(st.secrets.get("users", {}))
-        if users.get(user.strip().lower()) == pwd:
-            return True
-    except Exception:
-        pass
-    # 3) Fallback local
-    return USERS.get(user.strip().lower()) == pwd
-
-
-def _img_src(path_or_url):
-    """Aceita URL, data URL ou caminho local (base64)."""
-    if not path_or_url:
-        return ''
-    if path_or_url.startswith(('http://', 'https://', 'data:')):
-        return path_or_url
-    try:
-        with open(path_or_url, 'rb') as f:
-            data = base64.b64encode(f.read()).decode()
-        ext = path_or_url.rsplit('.', 1)[-1].lower()
-        mime = 'image/jpeg' if ext in ('jpg', 'jpeg') else f'image/{ext}'
-        return f'data:{mime};base64,{data}'
-    except Exception:
-        return ''
-
-
-def get_login_css():
-    return """<style>
-    [data-testid="stSidebar"] { display: none !important; }
-    [data-testid="stHeader"]   { display: none !important; }
-    .main .block-container {
-        padding-top: 1rem !important;
-        padding-left: 2rem !important;
-        padding-right: 2rem !important;
-        max-width: 1400px !important;
-    }
-    .stApp {
-        background:
-            radial-gradient(circle at 20% 40%, rgba(0,245,255,0.05), transparent 45%),
-            radial-gradient(circle at 80% 20%, rgba(181,55,255,0.05), transparent 45%),
-            #05070f !important;
-    }
-
-    .login-header {
-        text-align: center;
-        margin-bottom: 18px;
-    }
-    .login-logo {
-        font-size: 78px;
-        line-height: 1;
-        margin-bottom: 6px;
-        filter: drop-shadow(0 0 28px rgba(0,245,255,0.75))
-                drop-shadow(0 0 55px rgba(181,55,255,0.45));
-        animation: logoPulse 4s ease-in-out infinite;
-    }
-    @keyframes logoPulse {
-        0%,100% { filter: drop-shadow(0 0 28px rgba(0,245,255,0.75))
-                          drop-shadow(0 0 55px rgba(181,55,255,0.45)); }
-        50%     { filter: drop-shadow(0 0 42px rgba(0,245,255,0.95))
-                          drop-shadow(0 0 75px rgba(181,55,255,0.65)); }
-    }
-    .login-brand-title {
-        line-height: 1.05;
-        font-weight: 900;
-        letter-spacing: -1.5px;
-    }
-    .login-brand-title .lt-white {
-        font-size: 36px;
-        color: #f0f5ff;
-        text-shadow: 0 0 22px rgba(0,245,255,0.35);
-    }
-    .login-brand-title .lt-grad {
-        font-size: 36px;
-        background: linear-gradient(135deg, #00ff88 0%, #00f5ff 50%, #b537ff 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        filter: drop-shadow(0 0 18px rgba(0,245,255,0.5));
-    }
-
-    .login-card {
-        background: rgba(10, 15, 28, 0.92);
-        border: 1px solid rgba(0,245,255,0.28);
-        border-radius: 16px;
-        padding: 26px 26px 22px 26px;
-        box-shadow:
-            0 0 50px rgba(0,245,255,0.15),
-            0 0 100px rgba(181,55,255,0.08),
-            inset 0 1px 0 rgba(0,245,255,0.3),
-            inset 0 0 40px rgba(0,245,255,0.03);
-        backdrop-filter: blur(8px);
-    }
-    .login-welcome {
-        font-size: 22px;
-        font-weight: 900;
-        color: #f0f5ff;
-        text-align: center;
-        margin-bottom: 4px;
-    }
-    .login-welcome .grn {
-        color: #00ff88;
-        text-shadow: 0 0 14px rgba(0,255,136,0.6);
-    }
-    .login-welcome-sub {
-        font-size: 12.5px;
-        color: #7a89a8;
-        text-align: center;
-        margin-bottom: 20px;
-        line-height: 1.5;
-    }
-
-    .stTextInput input {
-        background: rgba(18,24,42,0.95) !important;
-        border: 1px solid rgba(0,245,255,0.22) !important;
-        border-radius: 10px !important;
-        color: #f0f5ff !important;
-        padding: 12px 14px 12px 46px !important;
-        font-size: 14px !important;
-        height: 50px !important;
-        transition: all 0.2s;
-    }
-    .stTextInput input:focus {
-        border-color: #00f5ff !important;
-        box-shadow: 0 0 22px rgba(0,245,255,0.35) !important;
-    }
-    .stTextInput input::placeholder { color: #55617d !important; }
-
-    .st-key-login_user [data-baseweb="input"] { position: relative; }
-    .st-key-login_user [data-baseweb="input"]::before {
-        content: ""; position: absolute; left: 14px; top: 50%;
-        transform: translateY(-50%);
-        width: 20px; height: 20px; opacity: 0.55;
-        background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f5ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>") no-repeat center;
-        z-index: 2; pointer-events: none;
-    }
-    .st-key-login_pwd [data-baseweb="input"] { position: relative; }
-    .st-key-login_pwd [data-baseweb="input"]::before {
-        content: ""; position: absolute; left: 14px; top: 50%;
-        transform: translateY(-50%);
-        width: 20px; height: 20px; opacity: 0.55;
-        background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f5ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>") no-repeat center;
-        z-index: 2; pointer-events: none;
-    }
-
-    .stCheckbox label span {
-        color: #f0f5ff !important;
-        font-size: 12.5px !important;
-        font-weight: 600 !important;
-    }
-    .forgot-link {
-        text-align: right;
-        font-size: 12px;
-        color: #00ff88 !important;
-        font-weight: 700;
-        padding-top: 10px;
-        text-decoration: none;
-        display: block;
-        transition: all 0.15s;
-    }
-    .forgot-link:hover { color: #00f5ff !important; text-shadow: 0 0 10px rgba(0,245,255,0.6); }
-
-    .stFormSubmitButton button {
-        background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%) !important;
-        color: #05070f !important;
-        border: none !important;
-        font-weight: 900 !important;
-        font-size: 14.5px !important;
-        letter-spacing: 2px !important;
-        border-radius: 10px !important;
-        height: 50px !important;
-        margin-top: 4px;
-        box-shadow: 0 0 32px rgba(0,255,136,0.45),
-                    0 0 65px rgba(0,255,136,0.18) !important;
-        text-transform: uppercase;
-        transition: all 0.2s !important;
-    }
-    .stFormSubmitButton button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 0 45px rgba(0,255,136,0.7),
-                    0 0 90px rgba(0,255,136,0.3) !important;
-    }
-
-    .login-bottom-sep {
-        display: flex; align-items: center; gap: 12px;
-        margin: 22px 0 18px 0;
-    }
-    .login-bottom-sep .line {
-        flex: 1; height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0,245,255,0.35), transparent);
-    }
-    .login-bottom-sep .text {
-        font-size: 11px; color: #7a89a8;
-        text-transform: uppercase; letter-spacing: 1.5px;
-        font-weight: 800; white-space: nowrap;
-    }
-    .login-brand-footer {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 0 6px;
-    }
-    .login-brand-footer .bf-left { display: flex; align-items: center; gap: 10px; }
-    .login-brand-footer .ic {
-        font-size: 22px;
-        filter: drop-shadow(0 0 10px rgba(0,245,255,0.7));
-    }
-    .login-brand-footer .bname {
-        font-size: 13px; font-weight: 900; line-height: 1.1;
-        color: #f0f5ff;
-    }
-    .login-brand-footer .bname .grad {
-        background: linear-gradient(135deg, #00f5ff, #b537ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .login-brand-footer .bf-right {
-        text-align: right;
-        font-size: 9.5px; letter-spacing: 1.5px;
-        font-weight: 800; color: #55617d;
-        text-transform: uppercase; line-height: 1.4;
-    }
-    .login-brand-footer .bf-right b { color: #00f5ff; }
-
-    .login-right-img {
-        border-radius: 20px;
-        overflow: hidden;
-        border: 1px solid rgba(0,245,255,0.2);
-        box-shadow:
-            0 0 50px rgba(0,245,255,0.15),
-            0 0 100px rgba(181,55,255,0.1);
-        height: 100%;
-        min-height: 620px;
-        position: relative;
-    }
-    .login-right-img img {
-        width: 100%;
-        height: 100%;
-        min-height: 620px;
-        object-fit: cover;
-        object-position: center top;
-        display: block;
-    }
-    .login-right-img::after {
-        content: '';
-        position: absolute; inset: 0;
-        background: linear-gradient(90deg, rgba(5,7,15,0.55) 0%, transparent 35%, transparent 100%);
-        pointer-events: none;
-    }
-    </style>"""
-
-
-def render_login():
-    st.markdown(get_login_css(), unsafe_allow_html=True)
-
-    _, wrapper, _ = st.columns([0.4, 12, 0.4])
-    with wrapper:
-        col_left, col_right = st.columns([1, 1], gap="large")
-
-        # ── COLUNA ESQUERDA: logo + card ──
-        with col_left:
-            st.markdown("""
-            <div class="login-header">
-                <div class="login-logo">💀</div>
-                <div class="login-brand-title">
-                    <div class="lt-white">E-Soccer</div>
-                    <div class="lt-grad">Fifa Analytics</div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown('<div class="login-card">', unsafe_allow_html=True)
-            st.markdown("""
-                <div class="login-welcome">Bem-vindo de <span class="grn">volta!</span></div>
-                <div class="login-welcome-sub">Acesse sua conta e continue analisando os melhores jogos.</div>
-            """, unsafe_allow_html=True)
-
-            with st.form("login_form", clear_on_submit=False):
-                with st.container(key="login_user"):
-                    user = st.text_input("Usuário", placeholder="Usuário",
-                                         label_visibility="collapsed",
-                                         key="login_user_input")
-                with st.container(key="login_pwd"):
-                    pwd = st.text_input("Senha", type="password", placeholder="Senha",
-                                        label_visibility="collapsed",
-                                        key="login_pwd_input")
-
-                c1, c2 = st.columns([1, 1])
-                with c1:
-                    st.checkbox("Lembrar-me", value=True, key="login_remember")
-                with c2:
-                    st.markdown('<a href="#" class="forgot-link">Esqueceu sua senha?</a>',
-                                unsafe_allow_html=True)
-
-                submit = st.form_submit_button("→  ENTRAR", width='stretch')
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            st.markdown("""
-            <div class="login-bottom-sep">
-                <span class="line"></span>
-                <span class="text">A sua vantagem em cada análise</span>
-                <span class="line"></span>
-            </div>
-            <div class="login-brand-footer">
-                <div class="bf-left">
-                    <span class="ic">💀</span>
-                    <span class="bname">E-Soccer<br><span class="grad">Fifa Analytics</span></span>
-                </div>
-                <div class="bf-right">
-                    INTELIGÊNCIA<br><b>PARA A SUA APOSTA</b>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        # ── COLUNA DIREITA: imagem do jogador ──
-        with col_right:
-            img_src = _img_src(LOGIN_IMAGE)
-            if img_src:
-                st.markdown(
-                    f'<div class="login-right-img"><img src="{img_src}" alt="" /></div>',
-                    unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class="login-right-img" style="display:flex; align-items:center;
-                    justify-content:center; background:linear-gradient(135deg,
-                    rgba(0,245,255,0.05), rgba(181,55,255,0.05));
-                    font-size:48px; opacity:0.4;">
-                    ⚽
-                </div>
-                """, unsafe_allow_html=True)
-
-    # ── Submit ──
-    if submit:
-        if check_credentials(user.strip(), pwd):
-            st.session_state.autenticado = True
-            st.session_state.usuario_logado = user.strip() or "convidado"
-            st.rerun()
-        else:
-            st.error("❌ Usuário ou chave incorretos.")
 
 
 # ============================================
@@ -1134,10 +1092,8 @@ def safe_int(v, default=0):
 
 def get_safe_over_line_ft(g):
     if g is None or g == '': return '', ''
-    try:
-        g = float(g)
-    except:
-        return '', ''
+    try: g = float(g)
+    except: return '', ''
     for m, l, lb in SAFE_LINE_TABLE:
         if g >= m: return l, lb
     return 'Sem Over', 'muito baixa'
@@ -1145,17 +1101,13 @@ def get_safe_over_line_ft(g):
 
 def is_over_25_ht_safe(g):
     if g is None or g == '': return False
-    try:
-        return float(g) >= HT_OVER_25_THRESHOLD
-    except:
-        return False
+    try: return float(g) >= HT_OVER_25_THRESHOLD
+    except: return False
 
 
 def parse_pct(v):
-    try:
-        return float(str(v).replace('%', '').strip())
-    except:
-        return 0.0
+    try: return float(str(v).replace('%', '').strip())
+    except: return 0.0
 
 
 def normalize_league_name(n):
@@ -1209,6 +1161,120 @@ def team_initial(name):
     return s[:2].upper()
 
 
+def _render_html_safe(html_content: str):
+    if hasattr(st, 'html'):
+        try:
+            st.html(html_content); return
+        except Exception:
+            pass
+    minified = re.sub(r'\n\s*', '', html_content).strip()
+    st.markdown(minified, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════
+# COMPONENTES REUTILIZÁVEIS
+# ═══════════════════════════════════════════════
+def render_hero_v2(title="E-SOCCER FIFA", accent="ANALYTICS",
+                   right1="IN ALGORITHM",
+                   right2_pre="", right2_hl="WE TRUST!",
+                   right2_emoji="🧠",
+                   tagline="5.000 SIMULAÇÕES POR JOGO. ZERO ACHISMO.",
+                   logo="🤖", jersey="👕"):
+    svg_icon = (
+        '<svg viewBox="0 0 64 64" fill="none" stroke="url(#heroGrad)" '
+        'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+        '<defs><linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">'
+        '<stop offset="0%" stop-color="#00f5ff"/>'
+        '<stop offset="100%" stop-color="#b537ff"/>'
+        '</linearGradient></defs>'
+        '<path d="M32 10 C22 10 15 16 15 25 C10 26 8 30 8 34 '
+        'C8 37 9 39 11 41 C10 44 12 48 16 50 C19 53 24 53 28 51 '
+        'C30 53 34 53 36 51 C40 53 45 53 48 50 C52 48 54 44 53 41 '
+        'C55 39 56 37 56 34 C56 30 54 26 49 25 C49 16 42 10 32 10 Z"/>'
+        '<circle cx="24" cy="24" r="2.4" fill="#00f5ff" stroke="none"/>'
+        '<circle cx="40" cy="24" r="2.4" fill="#00f5ff" stroke="none"/>'
+        '<circle cx="32" cy="34" r="2.4" fill="#b537ff" stroke="none"/>'
+        '<circle cx="24" cy="43" r="2" fill="#b537ff" stroke="none"/>'
+        '<circle cx="40" cy="43" r="2" fill="#b537ff" stroke="none"/>'
+        '<path d="M24 26 L24 34 L32 34" stroke-width="1.8"/>'
+        '<path d="M40 26 L40 34 L32 34" stroke-width="1.8"/>'
+        '<path d="M24 34 L24 43" stroke-width="1.8"/>'
+        '<path d="M40 34 L40 43" stroke-width="1.8"/>'
+        '</svg>'
+    )
+    badge_content = (f'<span class="badge-emoji">{right2_emoji}</span>'
+                     if right2_emoji else svg_icon)
+
+    return (
+        '<div class="hero-v2">'
+        '<div class="hero-v2-left">'
+        f'<div class="hero-v2-logo">{logo}</div>'
+        '<div class="hero-v2-title-block">'
+        f'<div class="hero-v2-title">{title} <span class="hero-v2-accent">{accent}</span>'
+        '<span class="bolt">⚡</span></div>'
+        '<div class="hero-v2-tagline">'
+        '<span class="hero-v2-at">@FIFAlgorithm</span>'
+        '<span class="hero-v2-tag-sep">|</span>'
+        f'<span class="hero-v2-tag-text">{tagline}</span>'
+        '</div>'
+        '</div>'
+        '</div>'
+        '<div class="hero-v2-right">'
+        '<div class="hero-v2-right-text">'
+        f'<div class="hero-v2-rl1">{right1}</div>'
+        f'<div class="hero-v2-rl2">{right2_pre}<span class="hero-v2-hl">{right2_hl}</span></div>'
+        '</div>'
+        f'<div class="hero-v2-badge">{badge_content}</div>'
+        '</div>'
+        '</div>'
+    )
+
+
+def render_info_row_v2(jogos=0, upd_time="--:--", hoje="", online=True,
+                       prob_text="Monte Carlo + Dixon-Coles • 5.000 Simulações por jogo"):
+    online_html = ('<div class="info-v2-online"><span class="info-v2-dot"></span> ONLINE</div>'
+                   if online else '')
+    return f"""<div class="info-v2-row">
+        <div class="info-v2-card">
+            <div class="info-v2-icon">⚽</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">JOGOS DISPONÍVEIS</div>
+                <div class="info-v2-value">{jogos}</div>
+            </div>
+        </div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">⏰</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">ÚLTIMA ATUALIZAÇÃO</div>
+                <div class="info-v2-value purple">{upd_time}</div>
+                <div class="info-v2-sub">HOJE • {hoje}</div>
+            </div>
+        </div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">🧠</div>
+            <div class="info-v2-content" style="flex:1;">
+                <div class="info-v2-label" style="color:#00f5ff;">PROBABILIDADES BASEADAS EM</div>
+                <div class="info-v2-prob-text">{prob_text}</div>
+            </div>
+            {online_html}
+        </div>
+    </div>"""
+
+
+def render_footer_v2():
+    return """<div class="footer-v2">
+        <div class="footer-v2-left">
+            📊 FOOTBALL ANALYTICS <span class="footer-v2-accent">| FIFAlgorithm</span>
+        </div>
+        <div class="footer-v2-right">
+            ANALISAR <span class="dot-sep">•</span>
+            ENTENDER <span class="dot-sep">•</span>
+            APOSTAR <span class="dot-sep">•</span>
+            EVOLUIR
+        </div>
+    </div>"""
+
+
 # ============================================
 # ANÁLISE
 # ============================================
@@ -1236,8 +1302,7 @@ def compute_jc_jf(df, ad, ld):
             c = cs[lk]
             jc = c.get(str(r.get('casa', '')).strip().lower(), 0)
             jf = c.get(str(r.get('fora', '')).strip().lower(), 0)
-        jc_l.append(jc);
-        jf_l.append(jf)
+        jc_l.append(jc); jf_l.append(jf)
     return jc_l, jf_l
 
 
@@ -1259,35 +1324,27 @@ def get_team_stats(ldf, team):
     tg = ldf[(ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)]
     if tg.empty: return None
     fs, fc, hs, hc = [], [], [], []
-    o25 = bt = 0;
+    o25 = bt = 0
     gl = []
     for _, g in tg.iterrows():
         is_h = str(g['home_team']).strip().lower() == tl
-        a = safe_int(g.get('home_score'));
-        b = safe_int(g.get('away_score'))
-        hth = g.get('ht_home');
-        hta = g.get('ht_away')
+        a = safe_int(g.get('home_score')); b = safe_int(g.get('away_score'))
+        hth = g.get('ht_home'); hta = g.get('ht_away')
         if is_h:
-            fs.append(a);
-            fc.append(b)
+            fs.append(a); fc.append(b)
             if hth is not None and hta is not None:
-                hs.append(safe_int(hth));
-                hc.append(safe_int(hta))
+                hs.append(safe_int(hth)); hc.append(safe_int(hta))
         else:
-            fs.append(b);
-            fc.append(a)
+            fs.append(b); fc.append(a)
             if hth is not None and hta is not None:
-                hs.append(safe_int(hta));
-                hc.append(safe_int(hth))
-        tg_t = a + b;
+                hs.append(safe_int(hta)); hc.append(safe_int(hth))
+        tg_t = a + b
         gl.append(tg_t)
         if tg_t > 2.5: o25 += 1
         if a > 0 and b > 0: bt += 1
-    nf = len(fs);
-    nh = len(hs)
+    nf = len(fs); nh = len(hs)
     if nf == 0: return None
-    ak = sum(fs) / nf;
-    df = sum(fc) / nf
+    ak = sum(fs) / nf; df = sum(fc) / nf
     ah = (sum(hs) / nh) if nh > 0 else ak * HT_FACTOR
     dh = (sum(hc) / nh) if nh > 0 else df * HT_FACTOR
     va = float(np.var(fs)) if nf > 1 else 0
@@ -1305,29 +1362,6 @@ def get_team_stats(ldf, team):
             'n_ft': nf, 'n_ht': nh, 'var_atk_ft': va, 'var_def_ft': vd,
             'over_25_pct': o25 / nf, 'btts_pct': bt / nf, 'perfil': perfil,
             'total_goals_list': gl, 'media_gols_jogos': media}
-
-
-def compute_team_form(ldf, team, n=FORM_GAMES):
-    if ldf is None or ldf.empty: return []
-    tl = str(team).strip().lower()
-    tg = ldf[(ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)].copy()
-    if tg.empty: return []
-    if 'datetime_obj' in tg.columns and not tg['datetime_obj'].isna().all():
-        tg = tg.sort_values('datetime_obj', ascending=False)
-    results = []
-    for _, g in tg.head(n).iterrows():
-        is_h = str(g['home_team']).strip().lower() == tl
-        a = safe_int(g.get('home_score'));
-        b = safe_int(g.get('away_score'))
-        my = a if is_h else b;
-        opp = b if is_h else a
-        if my > opp:
-            results.append('V')
-        elif my < opp:
-            results.append('D')
-        else:
-            results.append('E')
-    return results
 
 
 def compute_team_over_under(ldf, team):
@@ -1350,10 +1384,63 @@ def compute_team_over_under(ldf, team):
     }
 
 
+def compute_expected_goals(ldf, player_name, opponent_name):
+    def _recent(team, n):
+        if ldf is None or ldf.empty: return None
+        tl = str(team).strip().lower()
+        if not tl: return None
+        tg = ldf[(ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)].copy()
+        if tg.empty: return None
+        if 'datetime_obj' in tg.columns and not tg['datetime_obj'].isna().all():
+            tg = tg.sort_values('datetime_obj', ascending=False)
+        else:
+            tg = tg.sort_values('time', ascending=False)
+        tg = tg.head(n)
+        if tg.empty: return None
+        gs, gc = [], []
+        for _, g in tg.iterrows():
+            is_h = str(g['home_team']).strip().lower() == tl
+            a = safe_int(g.get('home_score')); b = safe_int(g.get('away_score'))
+            if is_h: gs.append(a); gc.append(b)
+            else:    gs.append(b); gc.append(a)
+        return {'n': len(gs), 'scored': sum(gs) / len(gs), 'conceded': sum(gc) / len(gc)}
+
+    def _conf(n):
+        if n >= 10: return 'high'
+        if n >= 5:  return 'medium'
+        if n >= 3:  return 'low'
+        return 'none'
+
+    p5  = _recent(player_name, 5);   p10 = _recent(player_name, 10)
+    o5  = _recent(opponent_name, 5); o10 = _recent(opponent_name, 10)
+
+    if not p5 or not o5: return None
+
+    exp5  = (p5['scored']  + o5['conceded'])  / 2
+    exp10 = (p10['scored'] + o10['conceded']) / 2 if (p10 and o10) else exp5
+
+    n5  = min(p5['n'],  o5['n'])
+    n10 = min(p10['n'], o10['n']) if (p10 and o10) else n5
+
+    delta = exp5 - exp10
+    if delta >= 0.35:    trend, trend_icon, trend_color = 'up',        '📈', '#00ff88'
+    elif delta >= 0.15:  trend, trend_icon, trend_color = 'up_lite',   '↗️', '#00ff88'
+    elif delta <= -0.35: trend, trend_icon, trend_color = 'down',      '📉', '#ff2e88'
+    elif delta <= -0.15: trend, trend_icon, trend_color = 'down_lite', '↘️', '#ff2e88'
+    else:                trend, trend_icon, trend_color = 'stable',    '➖', '#7a89a8'
+
+    return {
+        'exp5': exp5, 'exp10': exp10,
+        'n5': n5, 'n10': n10,
+        'conf5': _conf(n5), 'conf10': _conf(n10),
+        'trend': trend, 'trend_icon': trend_icon, 'trend_color': trend_color,
+        'delta': delta,
+    }
+
+
 def compute_h2h_details(ldf, pa_n, pb_n):
     if ldf is None or ldf.empty: return None
-    pa = str(pa_n).strip().lower();
-    pb = str(pb_n).strip().lower()
+    pa = str(pa_n).strip().lower(); pb = str(pb_n).strip().lower()
     if not pa or not pb: return None
     h2h = ldf[((ldf['home_team'].str.lower() == pa) & (ldf['away_team'].str.lower() == pb)) |
               ((ldf['home_team'].str.lower() == pb) & (ldf['away_team'].str.lower() == pa))].reset_index(drop=True)
@@ -1364,23 +1451,16 @@ def compute_h2h_details(ldf, pa_n, pb_n):
     o05h = o15h = o25h = bth = 0
     nh = 0
     for i, (_, g) in enumerate(h2h.iterrows()):
-        ww = H2H_RECENCY ** i;
+        ww = H2H_RECENCY ** i
         w.append(ww)
         is_h = str(g['home_team']).strip().lower() == pa
         if is_h:
-            af = safe_int(g.get('home_score'));
-            bf = safe_int(g.get('away_score'))
-            ah = g.get('ht_home');
-            bh = g.get('ht_away')
+            af = safe_int(g.get('home_score')); bf = safe_int(g.get('away_score'))
+            ah = g.get('ht_home'); bh = g.get('ht_away')
         else:
-            af = safe_int(g.get('away_score'));
-            bf = safe_int(g.get('home_score'))
-            ah = g.get('ht_away');
-            bh = g.get('ht_home')
-        a_f.append(af);
-        b_f.append(bf);
-        a_h.append(ah);
-        b_h.append(bh)
+            af = safe_int(g.get('away_score')); bf = safe_int(g.get('home_score'))
+            ah = g.get('ht_away'); bh = g.get('ht_home')
+        a_f.append(af); b_f.append(bf); a_h.append(ah); b_h.append(bh)
         t = af + bf
         if t > 0.5: o05 += 1
         if t > 1.5: o15 += 1
@@ -1389,22 +1469,17 @@ def compute_h2h_details(ldf, pa_n, pb_n):
         if t > 4.5: o45 += 1
         if t > 5.5: o55 += 1
         if af > 0 and bf > 0: bt += 1
-        if af > bf:
-            va += 1
-        elif bf > af:
-            vb += 1
-        else:
-            emp += 1
+        if af > bf: va += 1
+        elif bf > af: vb += 1
+        else: emp += 1
         if ah is not None and bh is not None:
-            ah_i = safe_int(ah);
-            bh_i = safe_int(bh);
-            nh += 1
+            ah_i = safe_int(ah); bh_i = safe_int(bh); nh += 1
             th = ah_i + bh_i
             if th > 0.5: o05h += 1
             if th > 1.5: o15h += 1
             if th > 2.5: o25h += 1
             if ah_i > 0 and bh_i > 0: bth += 1
-    n = len(h2h);
+    n = len(h2h)
     tw = sum(w)
     la = sum(v * ww for v, ww in zip(a_f, w)) / tw if tw else 0
     lb = sum(v * ww for v, ww in zip(b_f, w)) / tw if tw else 0
@@ -1426,8 +1501,7 @@ def compute_h2h_details(ldf, pa_n, pb_n):
 
 
 def estimate_lambdas(ldf, casa, fora):
-    sc = get_team_stats(ldf, casa);
-    sf = get_team_stats(ldf, fora)
+    sc = get_team_stats(ldf, casa); sf = get_team_stats(ldf, fora)
     if not sc or not sf: return None
     if sc['n_ft'] == 0 or sf['n_ft'] == 0: return None
     lcf_f = (sc['ataque_ft'] + sf['defesa_ft']) / 2
@@ -1470,8 +1544,7 @@ def dc_tau(i, j, lam, mu, rho=DC_RHO):
 
 
 def build_dc(lam, mu, mx=DC_MAX_GOALS):
-    pl = poisson_pmf(lam, mx);
-    pm = poisson_pmf(mu, mx)
+    pl = poisson_pmf(lam, mx); pm = poisson_pmf(mu, mx)
     m = np.outer(pl, pm)
     for i in range(min(2, mx + 1)):
         for j in range(min(2, mx + 1)):
@@ -1483,7 +1556,7 @@ def build_dc(lam, mu, mx=DC_MAX_GOALS):
 
 
 def sample_dc(lam, mu, ns, rng, mx=DC_MAX_GOALS):
-    m = build_dc(lam, mu, mx);
+    m = build_dc(lam, mu, mx)
     flat = m.flatten()
     idx = rng.choice(len(flat), size=ns, p=flat)
     return idx // (mx + 1), idx % (mx + 1)
@@ -1492,69 +1565,16 @@ def sample_dc(lam, mu, ns, rng, mx=DC_MAX_GOALS):
 def compute_1x2_probs(ldf, casa, fora):
     lam = estimate_lambdas(ldf, casa, fora)
     if not lam: return (0.33, 0.33, 0.34)
-    lcf = lam['lam_casa_ft'];
-    lff = lam['lam_fora_ft']
+    lcf = lam['lam_casa_ft']; lff = lam['lam_fora_ft']
     if lcf <= 0 or lff <= 0: return (0.33, 0.33, 0.34)
     m = build_dc(lcf, lff, mx=8)
     p_home = p_draw = p_away = 0
     for i in range(9):
         for j in range(9):
-            if i > j:
-                p_home += m[i, j]
-            elif i == j:
-                p_draw += m[i, j]
-            else:
-                p_away += m[i, j]
+            if i > j: p_home += m[i, j]
+            elif i == j: p_draw += m[i, j]
+            else: p_away += m[i, j]
     return (p_home, p_draw, p_away)
-
-
-def compute_top_scores(ldf, pa, pb, top_n=3):
-    lam = estimate_lambdas(ldf, pa.strip().lower(), pb.strip().lower())
-    if not lam: return []
-    lcf = lam['lam_casa_ft'];
-    lff = lam['lam_fora_ft']
-    if lcf <= 0 or lff <= 0: return []
-    m = build_dc(lcf, lff, mx=6)
-    flat = []
-    for i in range(7):
-        for j in range(7):
-            flat.append((i, j, float(m[i, j])))
-    flat.sort(key=lambda x: -x[2])
-    return [(f"{i}-{j}", p) for i, j, p in flat[:top_n]]
-
-
-def compute_top3_tips(row, ldf, casa, fora):
-    tips = []
-    top_scores = compute_top_scores(ldf, casa, fora, top_n=1)
-    if top_scores:
-        sc, prob = top_scores[0]
-        tips.append({'icon': '🎲', 'label': 'PLACAR PROVÁVEL', 'value': sc,
-                     'detail': f"{prob * 100:.1f}% de chance", 'color': '#00f5ff'})
-    linha_seg = row.get('Linha Seg FT', '')
-    gols_ft = row.get('Gols FT', '-')
-    if linha_seg and linha_seg != 'Sem Over':
-        pct_map = {
-            'Over 5.5': row.get('Over 5.5 FT', '-'), 'Over 4.5': row.get('Over 4.5 FT', '-'),
-            'Over 3.5': row.get('Over 3.5 FT', '-'), 'Over 2.5': row.get('Over 2.5 FT', '-'),
-            'Over 1.5': row.get('Over 1.5 FT', '-'), 'Over 0.5': row.get('Over 0.5 FT', '-'),
-        }
-        pct = pct_map.get(linha_seg, '-')
-        tips.append({'icon': '🔥', 'label': 'APOSTAR', 'value': linha_seg,
-                     'detail': f"{pct} │ média {gols_ft}", 'color': '#00ff88'})
-    o25ht = row.get('O2.5 HT?', '')
-    pct_o25ht = row.get('Over 2.5 HT', '-')
-    if o25ht == '✅':
-        tips.append({'icon': '⏱️', 'label': 'OVER 2.5 HT', 'value': 'INDICADO',
-                     'detail': f"{pct_o25ht} na 1ª etapa", 'color': '#b537ff'})
-    else:
-        btts_val = parse_pct(row.get('BTTS FT', '0%'))
-        if btts_val >= 55:
-            tips.append({'icon': '👥', 'label': 'BTTS FT', 'value': row.get('BTTS FT', '-'),
-                         'detail': 'Ambas marcam', 'color': '#ffd600'})
-        else:
-            tips.append({'icon': '⚽', 'label': 'OVER 3.5 FT', 'value': row.get('Over 3.5 FT', '-'),
-                         'detail': f"média {gols_ft}", 'color': '#ff8c00'})
-    return tips
 
 
 def generate_pdf(df, title="E-Soccer — Jogos do Dia"):
@@ -1562,19 +1582,19 @@ def generate_pdf(df, title="E-Soccer — Jogos do Dia"):
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
                             leftMargin=0.4 * cm, rightMargin=0.4 * cm,
                             topMargin=0.8 * cm, bottomMargin=0.6 * cm)
-    els = [];
+    els = []
     styles = getSampleStyleSheet()
     ts = ParagraphStyle('T', parent=styles['Title'], fontSize=14, spaceAfter=4)
     ss = ParagraphStyle('S', parent=styles['Normal'], fontSize=8, textColor=rl_colors.grey)
     els.append(Paragraph(title, ts))
     els.append(Paragraph(f"FIFAlgorithm │ {datetime.now().strftime('%d/%m/%Y %H:%M')} │ {len(df)} jogos", ss))
     els.append(Spacer(1, 6))
-    header = [str(c) for c in df.columns];
+    header = [str(c) for c in df.columns]
     data = [header]
     for _, r in df.iterrows():
         data.append([str(v) if v is not None else '' for v in r.values])
-    nc = len(df.columns);
-    avail = 28.5 * cm;
+    nc = len(df.columns)
+    avail = 28.5 * cm
     cw = [avail / nc] * nc
     table = Table(data, colWidths=cw, repeatRows=1)
     table.setStyle(TableStyle([
@@ -1585,7 +1605,194 @@ def generate_pdf(df, title="E-Soccer — Jogos do Dia"):
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor('#f8f9fa')])]))
-    els.append(table);
+    els.append(table)
+    doc.build(els)
+    return buf.getvalue()
+
+
+def generate_tips_pdf(df_f, ad, ld):
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=0.5 * cm, rightMargin=0.5 * cm,
+                            topMargin=0.8 * cm, bottomMargin=0.8 * cm)
+    els = []
+    styles = getSampleStyleSheet()
+
+    C_BG_ROW = rl_colors.HexColor('#0a0f1e')
+    C_BG_ALT = rl_colors.HexColor('#0d1224')
+    C_BORDER = rl_colors.HexColor('#1a2540')
+    C_CYAN = rl_colors.HexColor('#00f5ff')
+    C_PURPLE = rl_colors.HexColor('#b537ff')
+    C_GREEN = rl_colors.HexColor('#00ff88')
+    C_RED = rl_colors.HexColor('#ff2e88')
+    C_YELLOW = rl_colors.HexColor('#ffd600')
+    C_ORANGE = rl_colors.HexColor('#ff8c00')
+    C_DIM = rl_colors.HexColor('#7a89a8')
+    C_WHITE = rl_colors.HexColor('#f0f5ff')
+
+    def mkstyle(size=8, color=C_WHITE, bold=False, align=TA_CENTER, leading=None):
+        return ParagraphStyle(
+            'p', fontSize=size, textColor=color,
+            fontName='Helvetica-Bold' if bold else 'Helvetica',
+            alignment=align, leading=leading or (size + 3))
+
+    def cor_pct(p):
+        if p >= 60: return '#00ff88'
+        if p >= 40: return '#ffd600'
+        return '#ff8c00'
+
+    def cor_ppj(p):
+        if p >= 2.5: return '#00ff88'
+        if p >= 2.0: return '#00f5ff'
+        if p >= 1.5: return '#ffd600'
+        if p >= 1.0: return '#ff8c00'
+        return '#ff2e88'
+
+    def form_html(form):
+        colors = {'V': '#00ff88', 'E': '#ffd600', 'D': '#ff2e88'}
+        out = ''
+        for f in form[:10]:
+            c = colors.get(f, '#7a89a8')
+            out += f'<font color="{c}"><b>●</b></font> '
+        return out.strip()
+
+    title_s = mkstyle(18, C_CYAN, True, TA_CENTER, 22)
+    sub_s = mkstyle(9, C_DIM, False, TA_CENTER)
+    els.append(Paragraph("E-Soccer Fifa Analytics — Dicas do Dia", title_s))
+    els.append(Paragraph(f"FIFAlgorithm  |  {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  {len(df_f)} jogos", sub_s))
+    els.append(Spacer(1, 10))
+
+    header_data = [[
+        Paragraph('<b>HORA / LIGA</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>CONFRONTO</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>MÉDIA</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>HT</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>FT</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>📊 LEITURA DOS PERFIS</b>', mkstyle(8.5, C_CYAN, True)),
+        Paragraph('<b>⭐ OVER PLAYERS</b>', mkstyle(8.5, C_CYAN, True)),
+    ]]
+
+    rows_data = []
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#101a30')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), C_CYAN),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('VALIGN', (0, 1), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 1), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 1), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, C_BORDER),
+        ('BOX', (0, 0), (-1, -1), 1, C_CYAN),
+    ]
+
+    for i, (_, row) in enumerate(df_f.iterrows(), start=1):
+        casa_raw = str(row.get('casa', '')); fora_raw = str(row.get('fora', ''))
+        hora = str(row.get('hora', '--:--'))
+        liga = str(row.get('competicao', '')).upper().replace('E-SOCCER - ', '').replace(' - ', ' ')
+        gols_ft = row.get('Gols FT', 0); gols_ht = row.get('Gols HT', 0)
+        try: gols_ft = float(gols_ft)
+        except: gols_ft = 0.0
+        try: gols_ht = float(gols_ht)
+        except: gols_ht = 0.0
+        rec_ht = row.get('Rec HT', 'Evitar HT')
+        prob_rec_ht = row.get('Prob Rec HT', '-')
+        linha_seg = row.get('Linha Seg FT', '') or '—'
+        linha_atende = linha_seg not in ('—', 'Sem Over', '')
+        ap_top = linha_seg if linha_atende else 'Sem linha'
+        if 'Over 2.5' in rec_ht: ht_c = '#00ff88'
+        elif 'Over 1.5' in rec_ht: ht_c = '#ffd600'
+        elif 'Over 0.5' in rec_ht: ht_c = '#ff8c00'
+        else: ht_c = '#ff2e88'
+        ft_c = '#00f5ff' if linha_atende else '#ff2e88'
+
+        lk = find_league_key(row.get('competicao', ''), ld)
+        ldf = ad.get(lk) if lk and lk in ad else None
+        pa = analyze_player_deep_profile(ldf, casa_raw) if ldf is not None else None
+        pb = analyze_player_deep_profile(ldf, fora_raw) if ldf is not None else None
+        ou_a = compute_team_over_under(ldf, casa_raw.lower()) if ldf is not None else {}
+        ou_b = compute_team_over_under(ldf, fora_raw.lower()) if ldf is not None else {}
+        p_a_15 = ou_a.get('1.5', 0) * 100; p_a_25 = ou_a.get('2.5', 0) * 100
+        p_b_15 = ou_b.get('1.5', 0) * 100; p_b_25 = ou_b.get('2.5', 0) * 100
+
+        cell1 = Paragraph(
+            f'<font color="#f0f5ff" size="11"><b>{hora}</b></font><br/>'
+            f'<font color="#00f5ff" size="7"><b>{liga[:20]}</b></font>',
+            mkstyle(8, C_WHITE, align=TA_CENTER))
+        cell2 = Paragraph(
+            f'<font color="#f0f5ff" size="10"><b>{casa_raw[:14]}</b></font><br/>'
+            f'<font color="#7a89a8" size="7">vs</font><br/>'
+            f'<font color="#f0f5ff" size="10"><b>{fora_raw[:14]}</b></font>',
+            mkstyle(8, C_WHITE, align=TA_CENTER))
+        cell3 = Paragraph(
+            f'<font color="#c77dff" size="9"><b>HT {gols_ht:.2f}</b></font><br/>'
+            f'<font color="#00f5ff" size="9"><b>FT {gols_ft:.2f}</b></font>',
+            mkstyle(8, C_WHITE, align=TA_CENTER))
+        cell4 = Paragraph(
+            f'<font color="{ht_c}" size="12"><b>{prob_rec_ht}</b></font><br/>'
+            f'<font color="{ht_c}" size="7.5"><b>{rec_ht.upper()}</b></font>',
+            mkstyle(8, C_WHITE, align=TA_CENTER))
+        cell5 = Paragraph(
+            f'<font color="{ft_c}" size="11"><b>{ap_top}</b></font>',
+            mkstyle(8, C_WHITE, align=TA_CENTER))
+
+        perfis_html = ''
+        if pa:
+            ppj_a = pa.get('ppj_5', 0); pc_a = cor_ppj(ppj_a)
+            form_a = form_html(pa.get('form', []))
+            arch_a = pa.get('arch_name', '—'); trend_a = pa.get('trend_icon', '➖')
+            perfis_html += (f'<font color="#00f5ff" size="8"><b>{casa_raw[:12]}</b></font>  '
+                            f'<font color="{pc_a}" size="10"><b>{ppj_a:.2f}</b></font> '
+                            f'<font color="#f0f5ff" size="8">{trend_a}</font>  '
+                            f'<font color="#7a89a8" size="7">{arch_a}</font><br/>'
+                            f'<font size="9">{form_a}</font><br/>')
+        else:
+            perfis_html += f'<font color="#7a89a8" size="7">{casa_raw[:12]}: sem dados</font><br/>'
+        if pb:
+            ppj_b = pb.get('ppj_5', 0); pc_b = cor_ppj(ppj_b)
+            form_b = form_html(pb.get('form', []))
+            arch_b = pb.get('arch_name', '—'); trend_b = pb.get('trend_icon', '➖')
+            perfis_html += (f'<font color="#b537ff" size="8"><b>{fora_raw[:12]}</b></font>  '
+                            f'<font color="{pc_b}" size="10"><b>{ppj_b:.2f}</b></font> '
+                            f'<font color="#f0f5ff" size="8">{trend_b}</font>  '
+                            f'<font color="#7a89a8" size="7">{arch_b}</font><br/>'
+                            f'<font size="9">{form_b}</font>')
+        else:
+            perfis_html += f'<font color="#7a89a8" size="7">{fora_raw[:12]}: sem dados</font>'
+        cell6 = Paragraph(perfis_html, mkstyle(7, C_WHITE, align=TA_LEFT, leading=11))
+
+        op_html = (f'<font color="#00ff88" size="8"><b>{casa_raw[:11]}</b></font><br/>'
+                   f'<font color="#7a89a8" size="7">1.5</font> '
+                   f'<font color="{cor_pct(p_a_15)}" size="9"><b>{p_a_15:.0f}%</b></font>   '
+                   f'<font color="#7a89a8" size="7">2.5</font> '
+                   f'<font color="{cor_pct(p_a_25)}" size="9"><b>{p_a_25:.0f}%</b></font><br/>'
+                   f'<font color="#00f5ff" size="8"><b>{fora_raw[:11]}</b></font><br/>'
+                   f'<font color="#7a89a8" size="7">1.5</font> '
+                   f'<font color="{cor_pct(p_b_15)}" size="9"><b>{p_b_15:.0f}%</b></font>   '
+                   f'<font color="#7a89a8" size="7">2.5</font> '
+                   f'<font color="{cor_pct(p_b_25)}" size="9"><b>{p_b_25:.0f}%</b></font>')
+        cell7 = Paragraph(op_html, mkstyle(7, C_WHITE, align=TA_LEFT, leading=11))
+
+        rows_data.append([cell1, cell2, cell3, cell4, cell5, cell6, cell7])
+        bg_color = C_BG_ROW if i % 2 == 1 else C_BG_ALT
+        style_cmds.append(('BACKGROUND', (0, i), (-1, i), bg_color))
+
+    all_data = header_data + rows_data
+    col_widths = [1.9 * cm, 3.0 * cm, 2.2 * cm, 2.0 * cm, 2.0 * cm, 8.8 * cm, 8.8 * cm]
+    tbl = Table(all_data, colWidths=col_widths, repeatRows=1)
+    tbl.setStyle(TableStyle(style_cmds))
+    els.append(tbl)
+
+    els.append(Spacer(1, 10))
+    foot_s = mkstyle(7, C_DIM, False, TA_CENTER)
+    els.append(Paragraph(
+        "E-Soccer Fifa Analytics  |  @FIFAlgorithm  |  "
+        f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')}", foot_s))
     doc.build(els)
     return buf.getvalue()
 
@@ -1606,7 +1813,7 @@ def monte_carlo(df, ad, ld, ns=N_SIMULATIONS, seed=42):
                     lcf, lff = lam['lam_casa_ft'], lam['lam_fora_ft']
                     lch, lfh = lam['lam_casa_ht'], lam['lam_fora_ht']
                     if lcf > 0 and lff > 0:
-                        gc, gf = sample_dc(lcf, lff, ns, rng);
+                        gc, gf = sample_dc(lcf, lff, ns, rng)
                         t = gc + gf
                         res['xG Casa'] = round(float(lcf), 2)
                         res['xG Fora'] = round(float(lff), 2)
@@ -1628,39 +1835,47 @@ def monte_carlo(df, ad, ld, ns=N_SIMULATIONS, seed=42):
                         res['Prob Empate'] = f"{p_d * 100:.0f}%"
                         res['Prob Fora'] = f"{p_a * 100:.0f}%"
                     if lch and lfh and lch > 0 and lfh > 0:
-                        gch, gfh = sample_dc(lch, lfh, ns, rng);
+                        gch, gfh = sample_dc(lch, lfh, ns, rng)
                         th = gch + gfh
                         p_o25ht = (th > 2.5).mean() * 100
                         p_o15ht = (th > 1.5).mean() * 100
                         p_o05ht = (th > 0.5).mean() * 100
-
                         res['Gols HT'] = round(float(th.mean()), 2)
                         res['Over 0.5 HT'] = f"{p_o05ht:.1f}%"
                         res['Over 1.5 HT'] = f"{p_o15ht:.1f}%"
                         res['Over 2.5 HT'] = f"{p_o25ht:.1f}%"
                         res['BTTS HT'] = f"{((gch > 0) & (gfh > 0)).mean() * 100:.1f}%"
-
                         if p_o25ht >= 65:
-                            res['Rec HT'] = 'Over 2.5 HT'
-                            res['Prob Rec HT'] = f"{p_o25ht:.0f}%"
-                            res['O2.5 HT?'] = '✅'
+                            res['Rec HT'] = 'Over 2.5 HT'; res['Prob Rec HT'] = f"{p_o25ht:.0f}%"; res['O2.5 HT?'] = '✅'
                         elif p_o15ht >= 75:
-                            res['Rec HT'] = 'Over 1.5 HT'
-                            res['Prob Rec HT'] = f"{p_o15ht:.0f}%"
-                            res['O2.5 HT?'] = '❌'
+                            res['Rec HT'] = 'Over 1.5 HT'; res['Prob Rec HT'] = f"{p_o15ht:.0f}%"; res['O2.5 HT?'] = '❌'
                         elif p_o05ht >= 85:
-                            res['Rec HT'] = 'Over 0.5 HT'
-                            res['Prob Rec HT'] = f"{p_o05ht:.0f}%"
-                            res['O2.5 HT?'] = '❌'
+                            res['Rec HT'] = 'Over 0.5 HT'; res['Prob Rec HT'] = f"{p_o05ht:.0f}%"; res['O2.5 HT?'] = '❌'
                         else:
-                            res['Rec HT'] = 'Evitar HT'
-                            res['Prob Rec HT'] = '-'
-                            res['O2.5 HT?'] = '❌'
+                            res['Rec HT'] = 'Evitar HT'; res['Prob Rec HT'] = '-'; res['O2.5 HT?'] = '❌'
                     res['Conf'] = f"{lam['conf_emoji']} {lam['conf_score']}"
             except Exception:
                 pass
         for c in EXTRA_COLUMNS: out[c].append(res[c])
     return out
+
+
+# ============================================
+# MONTE CARLO — VERSÃO COM CACHE
+# ============================================
+@st.cache_data(ttl=300, show_spinner=False, max_entries=8)
+def monte_carlo_cached(df: pd.DataFrame, ad: dict, ns: int = N_SIMULATIONS, seed: int = 42):
+    """
+    Wrapper com cache do Monte Carlo.
+
+    Como funciona:
+    - Streamlit hasheia os inputs (df + ad). Se já rodou com os MESMOS inputs
+      nos últimos 300s, devolve o resultado em memória (sem recalcular).
+    - Se df ou ad mudam (ex: clique em "⚡ ATUALIZAR JOGOS"), o hash muda
+      e o cache é invalidado automaticamente.
+    - TTL de 5 minutos garante que dados de scraping não fiquem muito velhos.
+    """
+    return monte_carlo(df, ad, LEAGUES, ns=ns, seed=seed)
 
 
 # ============================================
@@ -1678,9 +1893,7 @@ class EFootballScraper:
             'Referer': 'https://24live.com/pt/',
             'Origin': 'https://24live.com',
             'Connection': 'keep-alive',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Dest': 'empty', 'Sec-Fetch-Mode': 'cors', 'Sec-Fetch-Site': 'same-origin',
         })
 
     def get_league_matches(self, sid, max_retries=3, timeout=30):
@@ -1699,33 +1912,25 @@ class EFootballScraper:
         for attempt in range(max_retries):
             try:
                 r = self.session.get(url, params=params, timeout=timeout)
-                if r.status_code == 200:
-                    return r.json()
+                if r.status_code == 200: return r.json()
                 elif r.status_code in (429, 503):
-                    time.sleep(2 ** attempt)
-                    continue
+                    time.sleep(2 ** attempt); continue
                 else:
-                    last_err = f"HTTP {r.status_code}"
-                    time.sleep(1 + attempt)
-                    continue
+                    last_err = f"HTTP {r.status_code}"; time.sleep(1 + attempt); continue
             except requests.exceptions.ReadTimeout:
-                last_err = "Read timeout"
-                time.sleep(2 ** attempt)
+                last_err = "Read timeout"; time.sleep(2 ** attempt)
             except requests.exceptions.ConnectionError:
-                last_err = "Connection error"
-                time.sleep(2 ** attempt)
+                last_err = "Connection error"; time.sleep(2 ** attempt)
             except Exception as e:
-                last_err = str(e)
-                time.sleep(1)
-        if '_fetch_errors' not in st.session_state:
-            st.session_state['_fetch_errors'] = []
+                last_err = str(e); time.sleep(1)
+        if '_fetch_errors' not in st.session_state: st.session_state['_fetch_errors'] = []
         st.session_state['_fetch_errors'].append(f"{sid}: {last_err}")
         return []
 
     def extract(self, data):
         out = []
         today = datetime.now().strftime('%d/%m')
-        total = ended = mt = 0;
+        total = ended = mt = 0
         sm = []
         for m in data:
             total += 1
@@ -1735,27 +1940,23 @@ class EFootballScraper:
             p = m.get('participants', [])
             h = next((x for x in p if x.get('type') == 'home_team'), {})
             a = next((x for x in p if x.get('type') == 'away_team'), {})
-            sc = m.get('score', {});
+            sc = m.get('score', {})
             periods = sc.get('periods', [])
             hth = hta = None
             for per in periods:
                 if per.get('period') == 1:
-                    hth = per.get('home_team');
-                    hta = per.get('away_team');
-                    break
+                    hth = per.get('home_team'); hta = per.get('away_team'); break
             hth = safe_int(hth, None) if hth is not None else None
             hta = safe_int(hta, None) if hta is not None else None
-            sd = m.get('start_date', '');
-            ds = ts = '';
-            dl = None
+            sd = m.get('start_date', '')
+            ds = ts = ''; dl = None
             if sd:
                 try:
                     x = sd[:-1] if sd.endswith('Z') else sd
                     x = x.replace('+00:00', '')
-                    dt = datetime.fromisoformat(x);
+                    dt = datetime.fromisoformat(x)
                     dl = dt - timedelta(hours=3)
-                    ds = dl.strftime('%d/%m');
-                    ts = dl.strftime('%H:%M')
+                    ds = dl.strftime('%d/%m'); ts = dl.strftime('%H:%M')
                 except:
                     ds = sd[:10] if len(sd) >= 10 else ''
                     ts = sd[11:16] if len(sd) >= 16 else ''
@@ -1782,8 +1983,7 @@ class EFootballScraper:
 def test_24live_connectivity():
     try:
         r = requests.get("https://24live.com/", timeout=10, headers={
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
         return r.status_code == 200, f"HTTP {r.status_code}"
     except requests.exceptions.ReadTimeout:
         return False, "Timeout — site lento ou bloqueando"
@@ -1801,22 +2001,18 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
         'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8', 'Upgrade-Insecure-Requests': '1',
     }
     if 'aceodds_session' not in st.session_state:
-        sess = requests.Session();
-        sess.headers.update(headers)
+        sess = requests.Session(); sess.headers.update(headers)
         st.session_state['aceodds_session'] = sess
     sess = st.session_state['aceodds_session']
     r = None
     for attempt in range(max_retries):
         try:
             with st.spinner(f"Conectando AceOdds... ({attempt + 1}/{max_retries})"):
-                r = sess.get(url, timeout=timeout);
-                r.raise_for_status();
-                break
+                r = sess.get(url, timeout=timeout); r.raise_for_status(); break
         except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout,
                 requests.exceptions.ConnectionError):
             if attempt < max_retries - 1:
-                time.sleep(2 ** attempt);
-                continue
+                time.sleep(2 ** attempt); continue
             else:
                 if 'aceodds_games' in st.session_state and st.session_state['aceodds_games']:
                     return st.session_state['aceodds_games']
@@ -1825,7 +2021,7 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
             return st.session_state.get('aceodds_games', [])
     if r is None: return st.session_state.get('aceodds_games', [])
     try:
-        soup = BeautifulSoup(r.text, 'html.parser');
+        soup = BeautifulSoup(r.text, 'html.parser')
         jogos = []
         for row in soup.find_all('tr'):
             rt = row.get_text(" ", strip=True)
@@ -1842,7 +2038,7 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
                 if not casa and (' x ' in cc or ' vs ' in cc):
                     sep = ' x ' if ' x ' in cc else ' vs '
                     parts = cc.split(sep, 1)
-                    casa = parts[0].strip();
+                    casa = parts[0].strip()
                     fora = parts[1].strip() if len(parts) > 1 else ''
                     continue
                 cu = cc.upper()
@@ -1852,13 +2048,11 @@ def scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT):
             casa = re.sub(r'^(Ao Vivo Agora|Ao Vivo|Agendado)\s*', '', casa, flags=re.IGNORECASE).strip()
             fora = re.sub(r'^(Ao Vivo Agora|Ao Vivo|Agendado)\s*', '', fora, flags=re.IGNORECASE).strip()
             if casa and ' x ' in casa and not fora:
-                p = casa.split(' x ', 1);
-                casa = p[0].strip();
-                fora = p[1].strip()
+                p = casa.split(' x ', 1)
+                casa = p[0].strip(); fora = p[1].strip()
             su = (status + ' ' + rt).upper()
             is_live = 'AO VIVO' in su or 'LIVE' in su
-            ca = extract_alias(casa);
-            fa = extract_alias(fora)
+            ca = extract_alias(casa); fa = extract_alias(fora)
             if ca or fa:
                 jogos.append({'hora': hora, 'casa': ca, 'fora': fa,
                               'casa_full': casa, 'fora_full': fora,
@@ -1890,10 +2084,8 @@ try {
 } catch(e) {}
 </script>"""
         b64 = base64.b64encode(html.encode('utf-8')).decode('ascii')
-        try:
-            st.iframe(f"data:text/html;base64,{b64}", height=1)
-        except AttributeError:
-            components.html(html, height=0)
+        try: st.iframe(f"data:text/html;base64,{b64}", height=1)
+        except AttributeError: components.html(html, height=0)
     except Exception:
         pass
 
@@ -1905,8 +2097,7 @@ def check_oportunidades(df):
     for _, r in opps.iterrows():
         key = f"{r.get('hora', '')}|{r.get('casa', '')}|{r.get('fora', '')}"
         if key not in st.session_state.ultima_oportunidade:
-            novas.append(r);
-            st.session_state.ultima_oportunidade.add(key)
+            novas.append(r); st.session_state.ultima_oportunidade.add(key)
     return novas
 
 
@@ -1933,97 +2124,289 @@ def render_progress_row(label, pct):
 
 def render_card_header():
     return (
-        '<div class="mc-header-row">'
-        '<div class="mc-hcell">Hora</div>'
-        '<div class="mc-hcell">Confronto</div>'
-        '<div class="mc-hcell">⚽️ Média De Gols</div>'
-        '<div class="mc-hcell">🎯 Apostar HT</div>'
-        '<div class="mc-hcell">🎯 Apostar FT</div>'
-        '<div class="mc-hcell">⭐️ Over Players</div>'
+        '<div class="match-v2-header">'
+        '<div class="mvh-cell">Hora/Liga</div>'
+        '<div class="mvh-cell">Confronto</div>'
+        '<div class="mvh-cell">📊 Média</div>'
+        '<div class="mvh-cell">🎯 Apostar HT</div>'
+        '<div class="mvh-cell">🎯 Apostar FT</div>'
+        '<div class="mvh-cell">⭐ Over Players</div>'
         '</div>'
     )
 
 
-def render_card_row(row, casa_raw, fora_raw, ldf=None):
+def render_card_row_v2(row, casa_raw, fora_raw, ldf=None, perfil_a=None, perfil_b=None):
     hora = str(row.get('hora', '--:--'))
-    liga = str(row.get('competicao', '')).upper()
-    gols_ft = row.get('Gols FT', '-')
-    gols_ht = row.get('Gols HT', '-')
-    linha_seg = row.get('Linha Seg FT', '') or '—'
-    linha_atende = linha_seg not in ('—', 'Sem Over', '')
-    ou_a = compute_team_over_under(ldf, casa_raw.lower()) if ldf is not None else {}
-    ou_b = compute_team_over_under(ldf, fora_raw.lower()) if ldf is not None else {}
-    p_a_15 = ou_a.get('1.5', 0) * 100
-    p_a_25 = ou_a.get('2.5', 0) * 100
-    p_b_15 = ou_b.get('1.5', 0) * 100
-    p_b_25 = ou_b.get('2.5', 0) * 100
+    liga_full = str(row.get('competicao', '')).upper()
+    liga = liga_full.replace('E-SOCCER - ', '').replace(' - ', ' ').replace('E-SOCCER', '').strip()
 
-    def color_pct(p):
-        if p >= 60: return '#00ff88'
-        if p >= 40: return '#ffd600'
-        return '#ff8c00'
+    try: gols_ft = float(row.get('Gols FT', 0) or 0)
+    except: gols_ft = 0.0
+    try: gols_ht = float(row.get('Gols HT', 0) or 0)
+    except: gols_ht = 0.0
 
     rec_ht = row.get('Rec HT', 'Evitar HT')
     prob_rec_ht = row.get('Prob Rec HT', '-')
 
     if 'Over 2.5' in rec_ht:
-        o25_color = '#00ff88'
+        ht_cls, ht_lbl, ht_line = 'green', prob_rec_ht, 'OVER 2.5 HT'
     elif 'Over 1.5' in rec_ht:
-        o25_color = '#ffd600'
+        ht_cls, ht_lbl, ht_line = 'yellow', prob_rec_ht, 'OVER 1.5 HT'
     elif 'Over 0.5' in rec_ht:
-        o25_color = '#ff8c00'
+        ht_cls, ht_lbl, ht_line = 'cyan', prob_rec_ht, 'OVER 0.5 HT'
     else:
-        o25_color = '#ff2e88'
+        ht_cls, ht_lbl, ht_line = 'red', '—', 'EVITAR HT'
 
-    o25_top = f'{prob_rec_ht}'
-    o25_sub = f'{rec_ht}'
+    linha_seg = row.get('Linha Seg FT', '') or '—'
+    linha_atende = linha_seg not in ('—', 'Sem Over', '')
+    ft_cls, ft_lbl = ('cyan', linha_seg) if linha_atende else ('red', 'SEM LINHA')
 
-    if linha_atende:
-        linha_num = linha_seg.replace('Over ', '').strip()
-        ap_top = f'Over {linha_num} FT'
-        ap_color = '#00f5ff'
-    else:
-        ap_top = 'Sem linha'
-        ap_color = '#ff2e88'
+    ou_a = compute_team_over_under(ldf, casa_raw.lower()) if ldf is not None else {}
+    ou_b = compute_team_over_under(ldf, fora_raw.lower()) if ldf is not None else {}
+    p_a_15 = ou_a.get('1.5', 0) * 100
+    p_a_25 = ou_a.get('2.5', 0) * 100
+    p_a_35 = ou_a.get('3.5', 0) * 100
+    p_b_15 = ou_b.get('1.5', 0) * 100
+    p_b_25 = ou_b.get('2.5', 0) * 100
+    p_b_35 = ou_b.get('3.5', 0) * 100
+
+    exp_a = compute_expected_goals(ldf, casa_raw, fora_raw) if ldf is not None else None
+    exp_b = compute_expected_goals(ldf, fora_raw, casa_raw) if ldf is not None else None
+
+    def c_pct(p):
+        if p >= 60: return '#00ff88'
+        if p >= 40: return '#ffd600'
+        return '#ff8c00'
+
+    def c_exp(v):
+        if v >= 3.5: return '#00ff88'
+        if v >= 2.5: return '#ffd600'
+        if v >= 1.5: return '#ff8c00'
+        return '#ff2e88'
+
+    def exp_html_block(exp_data):
+        if not exp_data:
+            return (
+                '<div class="mv-over-exp">'
+                '<span class="mv-over-exp-lbl">Gols Esperados</span>'
+                '<span class="mv-over-exp-main" style="color:#7a89a8;">—</span>'
+                '</div>'
+            )
+        e5, e10 = exp_data['exp5'], exp_data['exp10']
+        c5, c10 = c_exp(e5), c_exp(e10)
+        main_color = c_exp(e5)
+        return (
+            '<div class="mv-over-exp">'
+            '<span class="mv-over-exp-lbl">Gols Esperados</span>'
+            f'<span class="mv-over-exp-main" style="color:{main_color};">{e5:.2f}</span>'
+            '<div class="mv-over-exp-samples">'
+            '<span class="mv-over-exp-group">'
+            f'<span class="mv-over-exp-smp {exp_data["conf5"]}">{exp_data["n5"]} JG</span>'
+            f'<span class="mv-over-exp-val-mini" style="color:{c5};">{e5:.2f}</span>'
+            '</span>'
+            '<span class="mv-over-exp-sep">│</span>'
+            '<span class="mv-over-exp-group">'
+            f'<span class="mv-over-exp-smp {exp_data["conf10"]}">{exp_data["n10"]} JG</span>'
+            f'<span class="mv-over-exp-val-mini" style="color:{c10};">{e10:.2f}</span>'
+            '</span>'
+            f'<span class="mv-over-exp-trend" style="color:{exp_data["trend_color"]};">'
+            f'{exp_data["trend_icon"]}</span>'
+            '</div>'
+            '</div>'
+        )
+
+    a_ini = team_initial(casa_raw); b_ini = team_initial(fora_raw)
+
+    def over_team_block(name, p15, p25, p35, color, exp_data):
+        return f'''<div class="mv-over-team">
+            <div class="mv-over-pname" style="color:{color};">{name[:16]}</div>
+            {exp_html_block(exp_data)}
+            <div class="mv-over-stat">
+                <span class="mv-over-lbl">Marcar 1.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p15)};">{p15:.0f}%</span>
+            </div>
+            <div class="mv-over-stat">
+                <span class="mv-over-lbl">Marcar 2.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p25)};">{p25:.0f}%</span>
+            </div>
+            <div class="mv-over-stat">
+                <span class="mv-over-lbl">Marcar 3.5</span>
+                <span class="mv-over-pct" style="color:{c_pct(p35)};">{p35:.0f}%</span>
+            </div>
+        </div>'''
 
     return (
-        '<div class="mc-row">'
-        f'<div class="mc-box mc-hora-block"><div class="h">{hora}</div><div class="l">{liga}</div></div>'
-        '<div class="mc-box mc-teams-box">'
-        f'<div class="mc-team-side left"><span class="name">{casa_raw}</span></div>'
-        '<span class="mc-vs">VS</span>'
-        f'<div class="mc-team-side right"><span class="name">{fora_raw}</span></div>'
+        '<div class="match-v2-row">'
+        f'<div class="mv-box mv-time"><div class="mv-time-val">{hora}</div>'
+        f'<div class="mv-league-tag">{liga[:22]}</div></div>'
+        '<div class="mv-box mv-teams">'
+        f'<div class="mv-team left"><div class="mv-crest">{a_ini}</div>'
+        f'<span class="mv-team-name">{casa_raw[:18]}</span></div>'
+        '<span class="mv-vs">VS</span>'
+        f'<div class="mv-team right"><span class="mv-team-name">{fora_raw[:18]}</span>'
+        f'<div class="mv-crest away">{b_ini}</div></div>'
         '</div>'
-        f'<div class="mc-box mc-media"><div class="vals"><span class="ht">HT {gols_ht}</span><span class="sep">|</span><span class="ft">FT {gols_ft}</span></div></div>'
-        f'<div class="mc-box mc-status"><div class="top" style="color:{o25_color};">{o25_top}</div><div class="sub" style="color:{o25_color};">{o25_sub}</div></div>'
-        f'<div class="mc-box mc-status"><div class="top" style="color:{ap_color};">{ap_top}</div></div>'
-        '<div class="mc-box mc-player-box">'
-        '<div class="phdr">OVER INDIVIDUAL</div>'
-        f'<div class="mc-pnames"><span class="pn" style="color:#00ff88;">{casa_raw[:14]}</span><span class="pn" style="color:#00f5ff;">{fora_raw[:14]}</span></div>'
-        '<div class="mc-pstats">'
-        '<div class="mc-pcol">'
-        f'<div class="mc-pstat"><span class="lbl">Marcar 1.5 Gols</span><span class="val" style="color:{color_pct(p_a_15)};">{p_a_15:.0f}%</span></div>'
-        f'<div class="mc-pstat"><span class="lbl">Marcar 2.5 Gols</span><span class="val" style="color:{color_pct(p_a_25)};">{p_a_25:.0f}%</span></div>'
-        '</div>'
-        '<div class="mc-pcol">'
-        f'<div class="mc-pstat"><span class="lbl">Marcar 1.5 Gols</span><span class="val" style="color:{color_pct(p_b_15)};">{p_b_15:.0f}%</span></div>'
-        f'<div class="mc-pstat"><span class="lbl">Marcar 2.5 Gols</span><span class="val" style="color:{color_pct(p_b_25)};">{p_b_25:.0f}%</span></div>'
-        '</div>'
-        '</div>'
-        '</div>'
+        f'<div class="mv-box mv-media">'
+        f'<div class="mv-media-vals">'
+        f'<span class="ht">HT {gols_ht:.2f}</span>'
+        f'<span class="ft">FT {gols_ft:.2f}</span>'
+        f'</div></div>'
+        f'<div class="mv-box mv-bet {ht_cls}">'
+        f'<div class="mv-bet-val">{ht_lbl}</div>'
+        f'<div class="mv-bet-line">{ht_line}</div>'
+        f'</div>'
+        f'<div class="mv-box mv-bet {ft_cls}">'
+        f'<div class="mv-bet-val">{ft_lbl}</div>'
+        f'</div>'
+        f'<div class="mv-box mv-over">'
+        f'<div class="mv-over-hdr">⭐ OVER INDIVIDUAL</div>'
+        f'<div class="mv-over-cols">'
+        f'{over_team_block(casa_raw, p_a_15, p_a_25, p_a_35, "#00ff88", exp_a)}'
+        f'{over_team_block(fora_raw, p_b_15, p_b_25, p_b_35, "#00f5ff", exp_b)}'
+        f'</div>'
+        f'</div>'
         '</div>'
     )
 
 
+def render_h2h_comparison(casa_raw, fora_raw, ldf, hora='--:--', liga=''):
+    if ldf is None or ldf.empty:
+        return '<p style="color:#7a89a8; padding:12px;">Sem dados H2H disponíveis.</p>'
+
+    def get_last_10(team_name):
+        tl = team_name.strip().lower()
+        mask = (ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)
+        games = ldf[mask].copy()
+        if games.empty: return None
+        if 'datetime_obj' in games.columns and not games['datetime_obj'].isna().all():
+            games = games.sort_values('datetime_obj', ascending=False)
+        else:
+            games = games.sort_values('time', ascending=False)
+        games = games.head(10)
+        gm, gs, ht, ft, form = [], [], [], [], []
+        pts = 0
+        for _, g in games.iterrows():
+            is_h = str(g['home_team']).strip().lower() == tl
+            a = safe_int(g.get('home_score')); b = safe_int(g.get('away_score'))
+            hth_r = g.get('ht_home'); hta_r = g.get('ht_away')
+            hth = safe_int(hth_r) if hth_r is not None and not (isinstance(hth_r, float) and math.isnan(hth_r)) else None
+            hta = safe_int(hta_r) if hta_r is not None and not (isinstance(hta_r, float) and math.isnan(hta_r)) else None
+            my = a if is_h else b; opp = b if is_h else a
+            gm.append(str(my)); gs.append(str(opp))
+            if hth is not None and hta is not None:
+                ht_my = hth if is_h else hta; ht_opp = hta if is_h else hth
+                ht.append(f"{ht_my}-{ht_opp}")
+            else: ht.append("—")
+            ft.append(f"{my}-{opp}")
+            if my > opp: form.append('V'); pts += 3
+            elif my < opp: form.append('D')
+            else: form.append('E'); pts += 1
+        n = len(gm)
+        ht_valid = [x for x in ht if x != "—"]
+        return {'gm': gm, 'gs': gs, 'ht': ht, 'ft': ft, 'form': form, 'n': n,
+                'avg_gm': sum(int(x) for x in gm) / n if n else 0,
+                'avg_gs': sum(int(x) for x in gs) / n if n else 0,
+                'avg_ht': (sum(sum(int(i) for i in x.split('-')) for x in ht_valid) / len(ht_valid)) if ht_valid else 0,
+                'avg_ft': sum(sum(int(i) for i in x.split('-')) for x in ft) / n if n else 0,
+                'ppj': pts / n if n else 0}
+
+    sa = get_last_10(casa_raw); sb = get_last_10(fora_raw)
+    if not sa or not sb:
+        return '<p style="color:#7a89a8; padding:12px;">Sem dados suficientes.</p>'
+
+    def form_dots(f):
+        html = ''
+        for x in f:
+            if x == 'V': bg, fc, sh = '#00ff88', '#05070f', 'rgba(0,255,136,0.7)'
+            elif x == 'E': bg, fc, sh = '#ffd600', '#05070f', 'rgba(255,214,0,0.7)'
+            else: bg, fc, sh = '#ff2e88', '#ffffff', 'rgba(255,46,136,0.7)'
+            html += (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+                     f'width:20px;height:20px;border-radius:50%;background:{bg};color:{fc};'
+                     f'font-size:10px;font-weight:900;font-family:\'JetBrains Mono\',monospace;'
+                     f'margin:0 2px;box-shadow:0 0 10px {sh};line-height:1;flex-shrink:0;">{x}</span>')
+        return html
+
+    def seq(items, mode='goals'):
+        html = ''
+        for it in items:
+            if mode == 'goals':
+                try: hl = 'highlight' if int(it) > 0 else ''
+                except: hl = ''
+            elif mode == 'ht':
+                if it == "—": hl = ''
+                else:
+                    try: hl = 'ht-hl' if sum(int(i) for i in it.split('-')) > 0 else ''
+                    except: hl = ''
+            else: hl = 'highlight'
+            html += f'<span class="h2h-seq-item {hl}">{it}</span>'
+        return html
+
+    def ppj_color(p):
+        if p >= 2.5: return '#00ff88'
+        if p >= 2.0: return '#00f5ff'
+        if p >= 1.5: return '#ffd600'
+        if p >= 1.0: return '#ff8c00'
+        return '#ff2e88'
+
+    return f"""<div class="h2h-card">
+        <div class="h2h-header">
+            <div class="h2h-team">
+                <div class="h2h-team-name">🛡️ {casa_raw}</div>
+                <div class="h2h-team-form">{form_dots(sa['form'])}</div>
+            </div>
+            <div class="h2h-match-info">
+                <div class="vs">VS</div>
+                <div class="league">{hora} · ÚLTIMOS 10 JOGOS</div>
+                <div class="h2h-ppj-matchup">
+                    <span class="val" style="color:{ppj_color(sa['ppj'])};">{sa['ppj']:.2f}</span>
+                    <span class="sep">×</span>
+                    <span class="val" style="color:{ppj_color(sb['ppj'])};">{sb['ppj']:.2f}</span>
+                </div>
+            </div>
+            <div class="h2h-team right">
+                <div class="h2h-team-name">{fora_raw} 🛡️</div>
+                <div class="h2h-team-form">{form_dots(sb['form'])}</div>
+            </div>
+        </div>
+        <div class="h2h-table">
+            <div class="h2h-col">
+                <div class="h2h-row"><div class="h2h-row-label">Gols Marcados</div>
+                    <div class="h2h-row-seq">{seq(sa['gm'], 'goals')}</div>
+                    <div class="h2h-row-avg">{sa['avg_gm']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Gols Sofridos</div>
+                    <div class="h2h-row-seq">{seq(sa['gs'], 'goals')}</div>
+                    <div class="h2h-row-avg">{sa['avg_gs']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Jogos HT</div>
+                    <div class="h2h-row-seq">{seq(sa['ht'], 'ht')}</div>
+                    <div class="h2h-row-avg ht">{sa['avg_ht']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Jogos FT</div>
+                    <div class="h2h-row-seq">{seq(sa['ft'], 'ft')}</div>
+                    <div class="h2h-row-avg ft">{sa['avg_ft']:.1f}</div></div>
+            </div>
+            <div class="h2h-col">
+                <div class="h2h-row"><div class="h2h-row-label">Gols Marcados</div>
+                    <div class="h2h-row-seq">{seq(sb['gm'], 'goals')}</div>
+                    <div class="h2h-row-avg">{sb['avg_gm']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Gols Sofridos</div>
+                    <div class="h2h-row-seq">{seq(sb['gs'], 'goals')}</div>
+                    <div class="h2h-row-avg">{sb['avg_gs']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Jogos HT</div>
+                    <div class="h2h-row-seq">{seq(sb['ht'], 'ht')}</div>
+                    <div class="h2h-row-avg ht">{sb['avg_ht']:.1f}</div></div>
+                <div class="h2h-row"><div class="h2h-row-label">Jogos FT</div>
+                    <div class="h2h-row-seq">{seq(sb['ft'], 'ft')}</div>
+                    <div class="h2h-row-avg ft">{sb['avg_ft']:.1f}</div></div>
+            </div>
+        </div>
+    </div>"""
+
+
 def render_match_card(row, ad, ld, idx=0):
     lk = find_league_key(row.get('competicao', ''), ld)
-    casa_raw = str(row.get('casa', ''));
-    fora_raw = str(row.get('fora', ''))
-    casa = casa_raw.strip().lower();
-    fora = fora_raw.strip().lower()
+    casa_raw = str(row.get('casa', '')); fora_raw = str(row.get('fora', ''))
+    casa = casa_raw.strip().lower(); fora = fora_raw.strip().lower()
     if not lk or lk not in ad:
-        st.info("Sem dados da liga.");
-        return
+        st.info("Sem dados da liga."); return
     ldf = ad[lk]
 
     st.markdown('<div class="section-label">📊 OVER/UNDER PARTIDA (HT → FT)</div>', unsafe_allow_html=True)
@@ -2031,90 +2414,292 @@ def render_match_card(row, ad, ld, idx=0):
     for line in ['0.5', '1.5', '2.5']:
         col = f'Over {line} HT'
         if col in row and row[col]:
-            try:
-                pct = parse_pct(row[col]) / 100
-            except:
-                continue
+            try: pct = parse_pct(row[col]) / 100
+            except: continue
             ou_parts.append(render_progress_row(f'{line} HT', pct))
     for line in ['0.5', '1.5', '2.5', '3.5', '4.5', '5.5']:
         col = f'Over {line} FT'
         if col in row and row[col]:
-            try:
-                pct = parse_pct(row[col]) / 100
-            except:
-                continue
+            try: pct = parse_pct(row[col]) / 100
+            except: continue
             ou_parts.append(render_progress_row(f'{line} FT', pct))
     if ou_parts:
-        st.markdown(
-            f'<div style="background: rgba(0,0,0,0.4); padding: 10px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">{"".join(ou_parts)}</div>',
-            unsafe_allow_html=True)
+        st.markdown(f'<div style="background: rgba(0,0,0,0.4); padding: 10px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">{"".join(ou_parts)}</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-label">🎯 OVER INDIVIDUAL (gols do time)</div>', unsafe_allow_html=True)
-    ou_a = compute_team_over_under(ldf, casa);
-    ou_b = compute_team_over_under(ldf, fora)
+    ou_a = compute_team_over_under(ldf, casa); ou_b = compute_team_over_under(ldf, fora)
     c1, c2 = st.columns(2)
     for col, team_name, ou_data, cor in [(c1, casa_raw, ou_a, '#00ff88'), (c2, fora_raw, ou_b, '#00f5ff')]:
         with col:
             if not ou_data:
-                st.markdown(
-                    f'<div style="font-size:12.5px; color:#7a89a8; padding:10px;">Sem dados p/ {team_name[:15]}</div>',
-                    unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:12.5px; color:#7a89a8; padding:10px;">Sem dados p/ {team_name[:15]}</div>', unsafe_allow_html=True)
                 continue
             rows_html = ''
             for line, pct in ou_data.items():
                 rows_html += render_progress_row(line, pct)
-            st.markdown(f'''<div style="background: rgba(0,0,0,0.4); padding: 10px 14px; 
-                border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
-                <div style="font-size:13px; font-weight:800; color:{cor}; margin-bottom:8px;
-                    text-shadow: 0 0 10px {cor};">
-                    {team_name[:20]}
-                </div>
-                {rows_html}
-            </div>''', unsafe_allow_html=True)
+            st.markdown(f'''<div style="background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
+                <div style="font-size:13px; font-weight:800; color:{cor}; margin-bottom:8px; text-shadow: 0 0 10px {cor};">{team_name[:20]}</div>
+                {rows_html}</div>''', unsafe_allow_html=True)
 
     st.markdown('<div class="section-label">📈 MÉDIAS & BTTS</div>', unsafe_allow_html=True)
-    med_ft = row.get('Gols FT', '-');
-    med_ht = row.get('Gols HT', '-')
-    btts_ft = row.get('BTTS FT', '-');
-    btts_ht = row.get('BTTS HT', '-')
+    med_ft = row.get('Gols FT', '-'); med_ht = row.get('Gols HT', '-')
+    btts_ft = row.get('BTTS FT', '-'); btts_ht = row.get('BTTS HT', '-')
+    try: med_ft_f = f"{float(med_ft):.2f}"
+    except: med_ft_f = str(med_ft)
+    try: med_ht_f = f"{float(med_ht):.2f}"
+    except: med_ht_f = str(med_ht)
     st.markdown(f"""<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; 
-            border:1px solid rgba(0,245,255,0.15);">
-            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; 
-                letter-spacing:1px; font-weight:700; margin-bottom:10px;">Média de Gols</div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;
-                border-bottom:1px solid rgba(0,245,255,0.06);">
+        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
+            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Média de Gols</div>
+            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0; border-bottom:1px solid rgba(0,245,255,0.06);">
                 <span style="color:#f0f5ff; font-weight:600;">HT</span>
-                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace;
-                    text-shadow: 0 0 10px rgba(181,55,255,0.5);">{med_ht}</span>
+                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(181,55,255,0.5);">{med_ht_f}</span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;">
                 <span style="color:#f0f5ff; font-weight:600;">FT</span>
-                <span style="color:#00f5ff; font-weight:800; font-family:'JetBrains Mono',monospace;
-                    text-shadow: 0 0 10px rgba(0,245,255,0.5);">{med_ft}</span>
+                <span style="color:#00f5ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(0,245,255,0.5);">{med_ft_f}</span>
             </div>
         </div>
-        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; 
-            border:1px solid rgba(0,245,255,0.15);">
-            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; 
-                letter-spacing:1px; font-weight:700; margin-bottom:10px;">Ambas Marcam</div>
-            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;
-                border-bottom:1px solid rgba(0,245,255,0.06);">
+        <div style="background: rgba(0,0,0,0.4); padding:12px 16px; border-radius:10px; border:1px solid rgba(0,245,255,0.15);">
+            <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Ambas Marcam</div>
+            <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0; border-bottom:1px solid rgba(0,245,255,0.06);">
                 <span style="color:#f0f5ff; font-weight:600;">BTTS HT</span>
-                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace;
-                    text-shadow: 0 0 10px rgba(181,55,255,0.5);">{btts_ht}</span>
+                <span style="color:#b537ff; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(181,55,255,0.5);">{btts_ht}</span>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:15px; padding:6px 0;">
                 <span style="color:#f0f5ff; font-weight:600;">BTTS FT</span>
-                <span style="color:#00ff88; font-weight:800; font-family:'JetBrains Mono',monospace;
-                    text-shadow: 0 0 10px rgba(0,255,136,0.5);">{btts_ft}</span>
+                <span style="color:#00ff88; font-weight:800; font-family:'JetBrains Mono',monospace; text-shadow: 0 0 10px rgba(0,255,136,0.5);">{btts_ft}</span>
             </div>
         </div>
     </div>""", unsafe_allow_html=True)
 
 
 # ============================================
-# RADAR
+# INSIGHTS PLAYERS — ENGINE
+# ============================================
+def _compute_window_stats(last_n, tl):
+    if last_n.empty: return None
+    nf = len(last_n)
+    goals_for, goals_against, ht_goals, ft_goals = [], [], [], []
+    form = []; over25 = btts = o15ht = o25ht = 0; points = 0
+    for _, g in last_n.iterrows():
+        is_h = str(g['home_team']).strip().lower() == tl
+        a = safe_int(g.get('home_score')); b = safe_int(g.get('away_score'))
+        hth_r = g.get('ht_home'); hta_r = g.get('ht_away')
+        hth = safe_int(hth_r) if hth_r is not None and not (isinstance(hth_r, float) and math.isnan(hth_r)) else None
+        hta = safe_int(hta_r) if hta_r is not None and not (isinstance(hta_r, float) and math.isnan(hta_r)) else None
+        my = a if is_h else b; opp = b if is_h else a
+        total = a + b
+        ht_total = (hth + hta) if (hth is not None and hta is not None) else None
+        goals_for.append(my); goals_against.append(opp); ft_goals.append(total)
+        if ht_total is not None: ht_goals.append(ht_total)
+        if my > opp: form.append('V'); points += 3
+        elif my < opp: form.append('D')
+        else: form.append('E'); points += 1
+        if total > 2.5: over25 += 1
+        if a > 0 and b > 0: btts += 1
+        if ht_total is not None:
+            if ht_total > 1.5: o15ht += 1
+            if ht_total > 2.5: o25ht += 1
+    n_ht = len(ht_goals)
+    avg_ft = sum(ft_goals) / nf if nf else 0
+    avg_ht = sum(ht_goals) / n_ht if n_ht else 0
+    avg_2ht = (avg_ft - avg_ht) if avg_ft and avg_ht else 0
+    variance = sum((x - avg_ft) ** 2 for x in ft_goals) / nf if nf > 0 else 0
+    std_dev = math.sqrt(variance)
+    return {'n': nf, 'avg_for': sum(goals_for) / nf if nf else 0,
+            'avg_against': sum(goals_against) / nf if nf else 0,
+            'avg_ft': avg_ft, 'avg_ht': avg_ht, 'avg_2ht': avg_2ht,
+            'over25_pct': over25 / nf if nf else 0, 'btts_pct': btts / nf if nf else 0,
+            'over15ht_pct': o15ht / n_ht if n_ht else 0, 'over25ht_pct': o25ht / n_ht if n_ht else 0,
+            'form': form, 'std_dev': std_dev, 'ft_goals': ft_goals,
+            'points': points, 'ppj': points / nf if nf else 0}
+
+
+def get_archetype_tag(p):
+    w15 = p['w15']
+    avg_for = w15['avg_for']; avg_against = w15['avg_against']
+    avg_ft = w15['avg_ft']; ht_avg = w15['avg_ht']; over25 = w15['over25_pct']
+    if avg_for >= 2.5 and avg_against >= 2.5: return "⚡", "OFENSIVO", "Máquina de Gols + Defesa Frágil"
+    elif avg_for >= 2.5 and avg_against <= 1.5: return "🛡️", "DEFENSIVO", "Ataque Eficiente + Defesa Sólida"
+    elif avg_for <= 1.0 and avg_against <= 1.0: return "🧱", "RETRANQUEIRO", "Jogo Cauteloso + Defesa Sólida"
+    elif avg_for <= 1.0 and avg_against >= 2.5: return "📉", "FRÁGIL", "Ataque Cauteloso + Defesa Vulnerável"
+    elif avg_ft >= 4.5 or over25 >= 0.7: return "🎯", "OVER PLAYER", "Média Alta (Over 2.5 > 70%)"
+    elif ht_avg >= 1.5: return "🔥", "HT QUENTE", "Marcador movimenta no 1º Tempo"
+    else: return "⚖️", "EQUILIBRADO", "Média Equilibrada de Gols"
+
+
+def analyze_player_deep_profile(ldf, player_name):
+    if ldf is None or ldf.empty: return None
+    tl = player_name.strip().lower()
+    mask = (ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)
+    games = ldf[mask].copy()
+    if games.empty: return None
+    if 'datetime_obj' in games.columns and not games['datetime_obj'].isna().all():
+        games = games.sort_values('datetime_obj', ascending=False)
+    w5 = _compute_window_stats(games.head(5), tl)
+    w15 = _compute_window_stats(games.head(15), tl)
+    if not w5 or not w15: return None
+    ppj_5 = w5['ppj']; ppj_15 = w15['ppj']; ppj_delta = ppj_5 - ppj_15
+    if ppj_delta >= 0.5: trend, trend_icon, trend_lbl = 'up', '📈', 'SUBINDO'
+    elif ppj_delta >= 0.2: trend, trend_icon, trend_lbl = 'slight_up', '↗️', 'LEVE ALTA'
+    elif ppj_delta <= -0.5: trend, trend_icon, trend_lbl = 'down', '📉', 'CAINDO'
+    elif ppj_delta <= -0.2: trend, trend_icon, trend_lbl = 'slight_down', '↘️', 'LEVE QUEDA'
+    else: trend, trend_icon, trend_lbl = 'stable', '➖', 'ESTÁVEL'
+    trend_delta = 0.0
+    if w15['avg_ft'] > 0: trend_delta = (w5['avg_ft'] - w15['avg_ft']) / w15['avg_ft']
+    consistency = 'consistent' if w15['std_dev'] <= 2.0 else ('volatile' if w15['std_dev'] >= 3.0 else 'moderate')
+    dna = []
+    if w15['avg_for'] >= 2.5: dna.append('OFENSIVO')
+    elif w15['avg_for'] <= 1.0: dna.append('CAUTELOSO')
+    else: dna.append('EQUILIBRADO')
+    if w15['avg_against'] >= 2.5: dna.append('DEFESA FRÁGIL')
+    elif w15['avg_against'] <= 1.0: dna.append('DEFESA SÓLIDA')
+    if w15['avg_ht'] >= 1.5: dna.append('HT QUENTE')
+    elif w15['avg_ht'] <= 0.7: dna.append('HT FRIO')
+    arch_icon, arch_name, arch_desc = get_archetype_tag({'w15': w15})
+    return {'w5': w5, 'w15': w15, 'trend': trend, 'trend_icon': trend_icon,
+            'trend_lbl': trend_lbl, 'trend_delta': trend_delta,
+            'ppj_5': ppj_5, 'ppj_15': ppj_15, 'ppj_delta': ppj_delta,
+            'consistency': consistency, 'dna': dna, 'form': w5['form'],
+            'arch_icon': arch_icon, 'arch_name': arch_name, 'arch_desc': arch_desc}
+
+
+def compute_player_ranking_stats(ldf, player_name):
+    if ldf is None or ldf.empty: return None
+    tl = player_name.strip().lower()
+    mask = (ldf['home_team'].str.lower() == tl) | (ldf['away_team'].str.lower() == tl)
+    games = ldf[mask].copy()
+    if games.empty: return None
+    if 'datetime_obj' in games.columns and not games['datetime_obj'].isna().all():
+        games = games.sort_values('datetime_obj', ascending=False)
+    else: games = games.sort_values('time', ascending=False)
+    games10 = games.head(10).reset_index(drop=True)
+    games5 = games.head(5)
+    n10 = len(games10); n5 = len(games5)
+    if n10 == 0: return None
+    wins = draws = losses = 0
+    gp10 = gc10 = gp5 = gc5 = 0
+    form = []
+    over_ht = {'0.5': 0, '1.5': 0, '2.5': 0}
+    over_ft = {'0.5': 0, '1.5': 0, '2.5': 0, '3.5': 0, '4.5': 0, '5.5': 0}
+    btts_ht = btts_ft = ht_valid = player_over_15 = player_over_25 = 0
+    for i, (_, g) in enumerate(games10.iterrows()):
+        is_h = str(g['home_team']).strip().lower() == tl
+        a = safe_int(g.get('home_score')); b = safe_int(g.get('away_score'))
+        my = a if is_h else b; opp = b if is_h else a
+        total_ft = a + b
+        if i < n5: gp5 += my; gc5 += opp
+        gp10 += my; gc10 += opp
+        if my > opp: wins += 1; form.append('V')
+        elif my < opp: losses += 1; form.append('D')
+        else: draws += 1; form.append('E')
+        for k, thr in [('0.5', 0.5), ('1.5', 1.5), ('2.5', 2.5), ('3.5', 3.5), ('4.5', 4.5), ('5.5', 5.5)]:
+            if total_ft > thr: over_ft[k] += 1
+        if a > 0 and b > 0: btts_ft += 1
+        hth_r = g.get('ht_home'); hta_r = g.get('ht_away')
+        hth = safe_int(hth_r) if hth_r is not None and not (isinstance(hth_r, float) and math.isnan(hth_r)) else None
+        hta = safe_int(hta_r) if hta_r is not None and not (isinstance(hta_r, float) and math.isnan(hta_r)) else None
+        if hth is not None and hta is not None:
+            ht_total = hth + hta; ht_valid += 1
+            for k, thr in [('0.5', 0.5), ('1.5', 1.5), ('2.5', 2.5)]:
+                if ht_total > thr: over_ht[k] += 1
+            if hth > 0 and hta > 0: btts_ht += 1
+        if my >= 2: player_over_15 += 1
+        if my >= 3: player_over_25 += 1
+    points = wins * 3 + draws
+    ppj = points / n10
+    return {'player': player_name, 'J': n10, 'V': wins, 'E': draws, 'D': losses,
+            'GP': gp10, 'GC': gc10, 'SG': gp10 - gc10, 'ppj': ppj, 'points': points,
+            'form': form,
+            'avg_gp_5': gp5 / n5 if n5 else 0, 'avg_gc_5': gc5 / n5 if n5 else 0,
+            'avg_gp_10': gp10 / n10, 'avg_gc_10': gc10 / n10,
+            'over_05_ht': over_ht['0.5'] / ht_valid if ht_valid else 0,
+            'over_15_ht': over_ht['1.5'] / ht_valid if ht_valid else 0,
+            'over_25_ht': over_ht['2.5'] / ht_valid if ht_valid else 0,
+            'btts_ht': btts_ht / ht_valid if ht_valid else 0,
+            'over_05_ft': over_ft['0.5'] / n10 if n10 else 0,
+            'over_15_ft': over_ft['1.5'] / n10 if n10 else 0,
+            'over_25_ft': over_ft['2.5'] / n10 if n10 else 0,
+            'over_35_ft': over_ft['3.5'] / n10 if n10 else 0,
+            'over_45_ft': over_ft['4.5'] / n10 if n10 else 0,
+            'over_55_ft': over_ft['5.5'] / n10 if n10 else 0,
+            'btts_ft': btts_ft / n10 if n10 else 0,
+            'player_over_15': player_over_15 / n10 if n10 else 0,
+            'player_over_25': player_over_25 / n10 if n10 else 0}
+
+
+def generate_insights_players_pdf(ranking, liga):
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=0.6 * cm, rightMargin=0.6 * cm,
+                            topMargin=1 * cm, bottomMargin=1 * cm)
+    els = []
+    styles = getSampleStyleSheet()
+    title_s = ParagraphStyle('T', parent=styles['Title'], fontSize=16,
+                             textColor=rl_colors.HexColor('#0099cc'),
+                             alignment=TA_CENTER, spaceAfter=6, fontName='Helvetica-Bold')
+    sub_s = ParagraphStyle('S', parent=styles['Normal'], fontSize=9,
+                           textColor=rl_colors.HexColor('#666666'),
+                           alignment=TA_CENTER, spaceAfter=10)
+    sec_s = ParagraphStyle('SEC', parent=styles['Normal'], fontSize=11,
+                           textColor=rl_colors.HexColor('#0099cc'),
+                           spaceBefore=8, spaceAfter=4, fontName='Helvetica-Bold')
+    foot_s = ParagraphStyle('F', parent=styles['Normal'], fontSize=7,
+                            textColor=rl_colors.HexColor('#999999'), alignment=TA_CENTER)
+    els.append(Paragraph("Insights Players — Ranking (Últimos 10 Jogos)", title_s))
+    els.append(Paragraph(f"FIFAlgorithm | {liga} | {len(ranking)} players | "
+                         f"Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", sub_s))
+
+    def build_table(header, rows):
+        data = [header] + rows
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0099cc')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 7), ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.3, rl_colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor('#f8f9fa')])]))
+        return table
+
+    els.append(Paragraph("Tabela 1 — Performance Geral", sec_s))
+    h1 = ['#', 'Jogador', 'J', 'V', 'E', 'D', 'PPJ', 'GP 5j', 'GP 10j', 'GC 5j', 'GC 10j']
+    r1 = [[str(i), r['player'][:16], str(r['J']), str(r['V']), str(r['E']), str(r['D']),
+           f"{r['ppj']:.2f}", f"{r['avg_gp_5']:.2f}", f"{r['avg_gp_10']:.2f}",
+           f"{r['avg_gc_5']:.2f}", f"{r['avg_gc_10']:.2f}"] for i, r in enumerate(ranking, 1)]
+    els.append(build_table(h1, r1)); els.append(Spacer(1, 8))
+
+    els.append(Paragraph("Tabela 2 — Mercados HT", sec_s))
+    h2 = ['#', 'Jogador', 'J', 'O 0.5 HT', 'O 1.5 HT', 'O 2.5 HT', 'BTTS HT']
+    r2 = [[str(i), r['player'][:16], str(r['J']),
+           f"{r['over_05_ht']*100:.0f}%", f"{r['over_15_ht']*100:.0f}%",
+           f"{r['over_25_ht']*100:.0f}%", f"{r['btts_ht']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
+    els.append(build_table(h2, r2)); els.append(Spacer(1, 8))
+
+    els.append(Paragraph("Tabela 3 — Mercados FT", sec_s))
+    h3 = ['#', 'Jogador', 'J', 'O 0.5', 'O 1.5', 'O 2.5', 'O 3.5', 'O 4.5', 'O 5.5', 'BTTS FT']
+    r3 = [[str(i), r['player'][:16], str(r['J']),
+           f"{r['over_05_ft']*100:.0f}%", f"{r['over_15_ft']*100:.0f}%",
+           f"{r['over_25_ft']*100:.0f}%", f"{r['over_35_ft']*100:.0f}%",
+           f"{r['over_45_ft']*100:.0f}%", f"{r['over_55_ft']*100:.0f}%",
+           f"{r['btts_ft']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
+    els.append(build_table(h3, r3)); els.append(Spacer(1, 8))
+
+    els.append(Paragraph("Tabela 4 — Gols Individuais do Player", sec_s))
+    h4 = ['#', 'Jogador', 'J', 'Méd GP', 'Marcou +1.5', 'Marcou +2.5']
+    r4 = [[str(i), r['player'][:16], str(r['J']), f"{r['avg_gp_10']:.2f}",
+           f"{r['player_over_15']*100:.0f}%", f"{r['player_over_25']*100:.0f}%"] for i, r in enumerate(ranking, 1)]
+    els.append(build_table(h4, r4))
+    els.append(Spacer(1, 10))
+    els.append(Paragraph("E-Soccer Fifa Analytics | @FIFAlgorithm", foot_s))
+    doc.build(els)
+    return buf.getvalue()
+
+
+# ============================================
+# RADAR — COMPUTE
 # ============================================
 def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
     radar = {}
@@ -2125,7 +2710,7 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
         if 'hora' in df_liga.columns:
             df_liga['_h'] = df_liga['hora'].apply(lambda x: safe_int(str(x).split(':')[0]) if x else 0)
             df_liga = df_liga.sort_values('_h')
-        df_liga = df_liga.head(ng);
+        df_liga = df_liga.head(ng)
         n = len(df_liga)
 
         def avg_pct(col):
@@ -2134,39 +2719,22 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
             for v in df_liga[col]:
                 s = str(v).strip()
                 if s and s not in ('', '-', 'nan', 'None', 'NaN'):
-                    try:
-                        vals.append(float(s.replace('%', '').strip()))
-                    except:
-                        pass
+                    try: vals.append(float(s.replace('%', '').strip()))
+                    except: pass
             return (sum(vals) / len(vals) / 100) if vals else 0
 
         gh = pd.to_numeric(df_liga.get('Gols HT', pd.Series()), errors='coerce').mean()
         gf = pd.to_numeric(df_liga.get('Gols FT', pd.Series()), errors='coerce').mean()
-        gh = 0 if pd.isna(gh) else gh;
-        gf = 0 if pd.isna(gf) else gf
-
-        if gf > 0:
-            pct_ht = (gh / gf) * 100
-            pct_ft = 100 - pct_ht
-        else:
-            pct_ht = 50.0;
-            pct_ft = 50.0
-
+        gh = 0 if pd.isna(gh) else gh; gf = 0 if pd.isna(gf) else gf
+        if gf > 0: pct_ht = (gh / gf) * 100; pct_ft = 100 - pct_ht
+        else: pct_ht = 50.0; pct_ft = 50.0
         if pct_ht >= 55:
-            tendencia_tempo = '1º Tempo Forte'
-            badge_class = 'badge-ht-heavy'
-            tempo_icon = '🔥'
+            tendencia_tempo = '1º Tempo Forte'; badge_class = 'badge-ht-heavy'; tempo_icon = '🔥'
         elif pct_ft >= 55:
-            tendencia_tempo = '2º Tempo Forte'
-            badge_class = 'badge-ft-heavy'
-            tempo_icon = '❄️'
+            tendencia_tempo = '2º Tempo Forte'; badge_class = 'badge-ft-heavy'; tempo_icon = '❄️'
         else:
-            tendencia_tempo = 'Equilibrado'
-            badge_class = 'badge-balanced'
-            tempo_icon = '⚖️'
-
-        tendencia = 'stable';
-        tendencia_delta = 0
+            tendencia_tempo = 'Equilibrado'; badge_class = 'badge-balanced'; tempo_icon = '⚖️'
+        tendencia = 'stable'; tendencia_delta = 0
         if n >= 4 and 'Gols FT' in df_liga.columns:
             half = n // 2
             gf_old = pd.to_numeric(df_liga['Gols FT'].iloc[:half], errors='coerce').mean()
@@ -2174,19 +2742,12 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
             if not pd.isna(gf_old) and not pd.isna(gf_new) and gf_old > 0:
                 delta = (gf_new - gf_old) / gf_old
                 tendencia_delta = delta
-                if delta >= 0.15:
-                    tendencia = 'up'
-                elif delta <= -0.15:
-                    tendencia = 'down'
-
-        o25f = avg_pct('Over 2.5 FT');
-        o35f = avg_pct('Over 3.5 FT')
-        o45f = avg_pct('Over 4.5 FT');
-        o25h = avg_pct('Over 2.5 HT')
-        btf = avg_pct('BTTS FT')
+                if delta >= 0.15: tendencia = 'up'
+                elif delta <= -0.15: tendencia = 'down'
+        o25f = avg_pct('Over 2.5 FT'); o35f = avg_pct('Over 3.5 FT'); o45f = avg_pct('Over 4.5 FT')
+        o25h = avg_pct('Over 2.5 HT'); btf = avg_pct('BTTS FT')
         perfil = 'OFENSIVA' if gf >= 4.5 else ('EQUILIBRADA' if gf >= 3.2 else 'DEFENSIVA')
         score = round(min(gf / 6.0, 1) * 40 + o25f * 20 + o25h * 20 + btf * 20)
-
         radar[liga] = {'n': n, 'avg_ft': gf, 'avg_ht': gh,
                        'pct_ht': pct_ht, 'pct_ft': pct_ft,
                        'tendencia_tempo': tendencia_tempo,
@@ -2200,58 +2761,275 @@ def compute_radar_from_fixtures(df_aceodds, ng=RADAR_GAMES):
 
 def _build_reason_best(info, lg):
     reasons = []
-    if info['avg_ft'] >= 5.5:
-        reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (altíssima)")
-    elif info['avg_ft'] >= 4.5:
-        reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (alta)")
-    else:
-        reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo")
-    if info['o25_ft'] >= 0.75:
-        reasons.append(f"<span class='hl'>{info['o25_ft'] * 100:.0f}%</span> dos jogos com Over 2.5 FT")
-    if info['o35_ft'] >= 0.55:
-        reasons.append(f"<span class='hl'>{info['o35_ft'] * 100:.0f}%</span> Over 3.5 FT")
-    if info['o45_ft'] >= 0.4:
-        reasons.append(f"<span class='hl'>{info['o45_ft'] * 100:.0f}%</span> Over 4.5 FT")
-    if info['o25_ht'] >= 0.55:
-        reasons.append(f"<span class='hl'>{info['o25_ht'] * 100:.0f}%</span> no 1º tempo")
-    if info['btts_ft'] >= 0.7:
-        reasons.append(f"BTTS em <span class='hl'>{info['btts_ft'] * 100:.0f}%</span>")
+    if info['avg_ft'] >= 5.5: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (altíssima)")
+    elif info['avg_ft'] >= 4.5: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo (alta)")
+    else: reasons.append(f"média de <b>{info['avg_ft']:.2f}</b> gols/jogo")
+    if info['o25_ft'] >= 0.75: reasons.append(f"<span class='hl'>{info['o25_ft'] * 100:.0f}%</span> dos jogos com Over 2.5 FT")
+    if info['o35_ft'] >= 0.55: reasons.append(f"<span class='hl'>{info['o35_ft'] * 100:.0f}%</span> Over 3.5 FT")
+    if info['o45_ft'] >= 0.4: reasons.append(f"<span class='hl'>{info['o45_ft'] * 100:.0f}%</span> Over 4.5 FT")
+    if info['o25_ht'] >= 0.55: reasons.append(f"<span class='hl'>{info['o25_ht'] * 100:.0f}%</span> no 1º tempo")
+    if info['btts_ft'] >= 0.7: reasons.append(f"BTTS em <span class='hl'>{info['btts_ft'] * 100:.0f}%</span>")
     if info.get('tendencia') == 'up':
         delta_pct = info.get('tendencia_delta', 0) * 100
         reasons.append(f"tendência de <b>alta</b> ({delta_pct:+.0f}%)")
     return " · ".join(reasons)
 
 
-def render_radar_tab():
-    st.markdown("""<div class="top-hero">
-        <div class="top-hero-left">
-            <span class="top-hero-icon">📡</span>
-            <span class="top-hero-title">Radar FIFA — <b>Análise de Ligas</b> <span class="top-hero-sep">|</span> <span class="top-hero-dev">@FIFAlgorithm</span></span>
-        </div>
-        <div class="top-hero-right">
-            <span class="status-dot"><span class="dot"></span> Online</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
+# ============================================
+# PAGE: JOGOS DO DIA (V2)
+# ============================================
+def page_jogos_do_dia():
+    _render_html_safe(render_hero_v2())
+
+    st.markdown('<div class="nav-v2">', unsafe_allow_html=True)
+    nc1, nc2, nc3, nc4 = st.columns(4)
+
+    with nc1:
+        if st.button("💀 CARREGAR DADOS", key="load_leagues", width='stretch', type="primary"):
+            with st.spinner("Carregando dados..."):
+                try:
+                    st.session_state['_fetch_errors'] = []
+                    st.session_state['_profile_cache'] = {}
+                    ad, dbg = {}, {}
+                    prog = st.progress(0, text="Buscando ligas...")
+                    for i, (ln, li) in enumerate(LEAGUES.items(), 1):
+                        prog.progress(i / len(LEAGUES), text=f"Buscando {ln}...")
+                        m = scraper.get_league_matches(li['id'])
+                        if m:
+                            rs = scraper.extract(m); dbg[ln] = scraper.last_debug
+                            if rs:
+                                d = pd.DataFrame(rs)
+                                if 'datetime_obj' in d.columns and not d['datetime_obj'].isna().all():
+                                    d = d.sort_values(by='datetime_obj', ascending=False)
+                                else: d = d.sort_values(by='time', ascending=False)
+                            else: d = pd.DataFrame()
+                            ad[ln] = d
+                        else:
+                            ad[ln] = pd.DataFrame(); dbg[ln] = {'matched_today': 0}
+                    prog.empty()
+                    st.session_state['all_data'] = ad
+                    st.session_state['debug_info'] = dbg
+                    total_jogos = sum(len(x) for x in ad.values() if x is not None and not x.empty)
+                    if total_jogos > 0: st.success(f"✅ {total_jogos} partidas carregadas")
+                    else: st.info("Sem partidas finalizadas hoje ainda.")
+                    st.rerun()
+                except Exception as e: st.error(f"Erro: {e}")
+
+    with nc2:
+        if st.button("⚡ ATUALIZAR JOGOS", key="load_games", width='stretch'):
+            with st.spinner("Atualizando jogos..."):
+                jogos = scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT)
+                if jogos:
+                    st.session_state['aceodds_games'] = jogos
+                    st.session_state['aceodds_last_update'] = datetime.now()
+                    st.session_state.ultima_oportunidade = set()
+                    st.session_state['_profile_cache'] = {}
+                    if not st.session_state.get('all_data'):
+                        prog = st.progress(0, text="Carregando ligas...")
+                        ad, dbg = {}, {}
+                        for i, (ln, li) in enumerate(LEAGUES.items(), 1):
+                            prog.progress(i / len(LEAGUES), text=f"Buscando {ln}...")
+                            m = scraper.get_league_matches(li['id'])
+                            if m:
+                                rs = scraper.extract(m); dbg[ln] = scraper.last_debug
+                                d = pd.DataFrame(rs) if rs else pd.DataFrame()
+                                if not d.empty and 'datetime_obj' in d.columns:
+                                    d = d.sort_values(by='datetime_obj', ascending=False)
+                                ad[ln] = d
+                            else:
+                                ad[ln] = pd.DataFrame(); dbg[ln] = {'matched_today': 0}
+                        prog.empty()
+                        st.session_state['all_data'] = ad
+                        st.session_state['debug_info'] = dbg
+                    st.success(f"✅ {len(jogos)} jogos atualizados!"); st.rerun()
+                else: st.error("❌ Não foi possível carregar.")
+
+    with nc3:
+        if st.button("📡 RADAR FIFA", key="go_radar", width='stretch'):
+            st.session_state.page = 'radar'; st.rerun()
+
+    with nc4:
+        if st.button("🧠 INSIGHTS PLAYERS", key="go_insights", width='stretch'):
+            st.session_state.page = 'insights_players'; st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if 'aceodds_games' not in st.session_state or not st.session_state['aceodds_games']:
+        st.markdown("""<div style="background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
+            padding: 16px 20px; border-radius: 10px; border-left: 4px solid #ffd600;
+            color: #f0f5ff; font-size: 14px; margin: 15px 0; box-shadow: 0 0 24px rgba(255,214,0,0.15);">
+            <b style="color:#ffd600; font-size:16px;">⚠️ Atenção</b> — Para dar início, clique em
+            <b style="color:#00f5ff;">💀 CARREGAR DADOS</b> e depois em
+            <b style="color:#00f5ff;">⚡ ATUALIZAR JOGOS</b>.
+        </div>""", unsafe_allow_html=True)
+        return
+
+    df = pd.DataFrame(st.session_state['aceodds_games'])
+    df['competicao'] = df['competicao'].apply(normalize_league_name)
+    ad = st.session_state.get('all_data', {})
+    if ad:
+        jc, jf = compute_jc_jf(df, ad, LEAGUES)
+        df['JC'], df['JF'] = jc, jf
+        with st.spinner("Rodando Monte Carlo..."):
+            r = monte_carlo_cached(df, ad)
+        for c, v in r.items(): df[c] = v
+        for c in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+        for c in EXTRA_COLUMNS:
+            if c in df.columns and c not in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
+                df[c] = df[c].fillna('').astype(str)
+        st.session_state['aceodds_games'] = df.to_dict('records')
+    else:
+        df['JC'] = df['JF'] = 0
+        for c in EXTRA_COLUMNS: df[c] = ''
+
+    novas = check_oportunidades(df)
+    if novas: emitir_alerta(novas)
+
+    upd_time = st.session_state.get('aceodds_last_update', datetime.now()).strftime('%H:%M')
+    hoje = datetime.now().strftime('%d/%m')
+    st.markdown(render_info_row_v2(jogos=len(df), upd_time=upd_time, hoje=hoje), unsafe_allow_html=True)
+
+    fc1, _sp = st.columns([3, 4])
+    with fc1:
+        liga_opts = ['🎮 Escolher Liga'] + [f"{info['icon']} {lg}" for lg, info in LEAGUES.items()]
+        liga_sel = st.selectbox("Liga", liga_opts, key='sel_liga', label_visibility='collapsed')
+        if liga_sel == '🎮 Escolher Liga': f_liga = '(todas)'
+        else:
+            f_liga = '(todas)'
+            for lg in LEAGUES.keys():
+                if lg in liga_sel: f_liga = lg; break
+
+    df_f = df.copy()
+    if f_liga != '(todas)':
+        df_f = df_f[df_f['competicao'] == f_liga]
+
+    if df_f.empty:
+        st.info("Nenhum jogo atende aos filtros.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True)
+        return
 
     st.markdown('<div class="pill-actions">', unsafe_allow_html=True)
-    cb1, _sp = st.columns([1.2, 6])
-    with cb1:
-        if st.button("⬅️ Voltar ao Menu", key="radar_back", width='stretch', type="primary"):
-            st.session_state.page = 'jogos_dia'
-            st.rerun()
+    pdf_c1, pdf_c2, _pdf_sp = st.columns([1.4, 1.4, 4])
+    with pdf_c1:
+        if st.button("📄 Gerar PDF de Dicas", key="gen_tips_pdf", width='stretch', type="primary"):
+            with st.spinner(f"Gerando PDF com {len(df_f)} jogos..."):
+                try:
+                    st.session_state['tips_pdf_bytes'] = generate_tips_pdf(df_f, ad, LEAGUES)
+                    st.session_state['tips_pdf_count'] = len(df_f)
+                    st.success(f"✅ PDF gerado com {len(df_f)} jogos!")
+                except Exception as e: st.error(f"Erro: {e}")
+    with pdf_c2:
+        if 'tips_pdf_bytes' in st.session_state:
+            st.download_button(
+                f"📥 Baixar PDF ({st.session_state.get('tips_pdf_count', 0)} jogos)",
+                data=st.session_state['tips_pdf_bytes'],
+                file_name=f"dicas_esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                mime="application/pdf", width='stretch', key='dl_tips_pdf')
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    cache = st.session_state.get('_profile_cache', {})
+    st.markdown(render_card_header(), unsafe_allow_html=True)
+
+    for i, (_, row) in enumerate(df_f.iterrows()):
+        casa_raw = str(row.get('casa', '')); fora_raw = str(row.get('fora', ''))
+        lk = find_league_key(row.get('competicao', ''), LEAGUES)
+        ldf = ad.get(lk) if lk and lk in ad else None
+        pa = pb = None
+        if ldf is not None:
+            key_a = (lk, casa_raw.strip().lower()); key_b = (lk, fora_raw.strip().lower())
+            if key_a not in cache: cache[key_a] = analyze_player_deep_profile(ldf, casa_raw)
+            if key_b not in cache: cache[key_b] = analyze_player_deep_profile(ldf, fora_raw)
+            pa, pb = cache[key_a], cache[key_b]
+        st.markdown(render_card_row_v2(row, casa_raw, fora_raw, ldf=ldf, perfil_a=pa, perfil_b=pb), unsafe_allow_html=True)
+        with st.expander(f"🔍 Ver análise completa — {casa_raw} × {fora_raw}", expanded=False):
+            if ldf is not None:
+                _render_html_safe(render_h2h_comparison(casa_raw, fora_raw, ldf,
+                                                        hora=str(row.get('hora', '--:--')),
+                                                        liga=str(row.get('competicao', ''))))
+            render_match_card(row, ad, LEAGUES, idx=i)
+    st.session_state['_profile_cache'] = cache
+
+    with st.expander("📊 Ver tabela completa + Downloads", expanded=False):
+        cols = ['hora', 'competicao', 'casa', 'fora', 'Gols HT', 'Gols FT', 'Linha Seg FT',
+                'Over 0.5 HT', 'Over 1.5 HT', 'Over 2.5 HT',
+                'Over 0.5 FT', 'Over 1.5 FT', 'Over 2.5 FT',
+                'Over 3.5 FT', 'Over 4.5 FT', 'Over 5.5 FT', 'BTTS FT']
+        df_sum = df_f[[c for c in cols if c in df_f.columns]]
+        st.dataframe(df_sum, width='stretch', hide_index=True, height=400)
+        c1, c2 = st.columns(2)
+        with c1:
+            csv = df_sum.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 CSV", data=csv,
+                               file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                               mime="text/csv", width='stretch')
+        with c2:
+            try:
+                pdf = generate_pdf(df_sum, "E-Soccer — Jogos do Dia")
+                st.download_button("📄 PDF Simples", data=pdf,
+                                   file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                                   mime="application/pdf", width='stretch')
+            except Exception as e: st.warning(f"PDF: {e}")
+
+    st.markdown(render_footer_v2(), unsafe_allow_html=True)
+
+
+# ============================================
+# PAGE: RADAR (V2)
+# ============================================
+def render_radar_tab():
+    _render_html_safe(render_hero_v2())
+
+    st.markdown('<div class="nav-v2">', unsafe_allow_html=True)
+    b1, b2, b3, b4 = st.columns(4)
+    with b1:
+        if st.button("⬅️ VOLTAR AO MENU", key="radar_back", width='stretch', type="primary"):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with b2:
+        if st.button("📅 JOGOS DO DIA", key="radar_goto_jogos", width='stretch'):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with b3:
+        if st.button("🧠 INSIGHTS PLAYERS", key="radar_goto_ins", width='stretch'):
+            st.session_state.page = 'insights_players'; st.rerun()
+    with b4:
+        st.markdown('<div style="padding:13px 16px;text-align:center;font-size:11.5px;font-weight:800;color:#00ff88;letter-spacing:0.8px;text-transform:uppercase;border:1.5px solid rgba(0,255,136,0.4);border-radius:10px;background:rgba(0,255,136,0.08);">🟢 Radar Ativo</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     df_ac = st.session_state.get('aceodds_games', None)
     if df_ac is None or (isinstance(df_ac, list) and not df_ac):
-        st.warning("⚠️ Carregue os **Jogos do Dia** primeiro.");
-        return
+        st.warning("⚠️ Carregue os **Jogos do Dia** primeiro.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     if isinstance(df_ac, list): df_ac = pd.DataFrame(df_ac)
-    if df_ac.empty: st.info("Sem dados."); return
+    if df_ac.empty:
+        st.info("Sem dados.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     df_ac = df_ac.copy()
     df_ac['competicao'] = df_ac['competicao'].apply(normalize_league_name)
     radar = compute_radar_from_fixtures(df_ac, RADAR_GAMES)
-    if not radar: st.warning("Sem dados."); return
+    if not radar:
+        st.warning("Sem dados.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
     rank = sorted(radar.items(), key=lambda x: -x[1]['score'])
+
+    best_score = rank[0][1]['score'] if rank else 0
+    total_ligas = len(radar)
+    st.markdown(f"""<div class="info-v2-row">
+        <div class="info-v2-card">
+            <div class="info-v2-icon">📡</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">LIGAS ANALISADAS</div>
+                <div class="info-v2-value">{total_ligas}</div>
+            </div>
+        </div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">🏆</div>
+            <div class="info-v2-content" style="flex:1;">
+                <div class="info-v2-label" style="color:#00f5ff;">MELHOR SCORE ENCONTRADO</div>
+                <div class="info-v2-prob-text">{best_score} pts · {rank[0][0] if rank else '—'}</div>
+            </div>
+            <div class="info-v2-online"><span class="info-v2-dot"></span> ATIVO</div>
+        </div>
+    </div>""", unsafe_allow_html=True)
 
     if rank:
         best_lg, best_info = rank[0]
@@ -2260,8 +3038,7 @@ def render_radar_tab():
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                     <span class="best-badge">🏆 MELHOR PARA OVER GOLS</span>
-                    <span style="font-size:22px; font-weight:900; color:#f0f5ff;
-                        text-shadow: 0 0 18px rgba(0,255,136,0.5);">
+                    <span style="font-size:22px; font-weight:900; color:#f0f5ff; text-shadow: 0 0 18px rgba(0,255,136,0.5);">
                         {LEAGUES.get(best_lg, {}).get('icon', '⚽')} {best_lg}
                     </span>
                     <span class="{best_info['badge_class']}" style="font-size:12px; padding:6px 14px;">
@@ -2270,40 +3047,30 @@ def render_radar_tab():
                 </div>
                 <div style="display:flex; align-items:center; gap:14px;">
                     <div style="text-align:right;">
-                        <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase;
-                            letter-spacing:1px; font-weight:800;">Score</div>
-                        <div style="font-size:32px; font-weight:900; color:#00ff88;
-                            font-family:'JetBrains Mono',monospace; line-height:1;
-                            text-shadow: 0 0 20px rgba(0,255,136,0.8);">{best_info['score']}</div>
+                        <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Score</div>
+                        <div style="font-size:32px; font-weight:900; color:#00ff88; font-family:'JetBrains Mono',monospace; line-height:1; text-shadow: 0 0 20px rgba(0,255,136,0.8);">{best_info['score']}</div>
                     </div>
                 </div>
             </div>
             <div class="best-reason">
-                <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase;
-                    letter-spacing:1px; font-weight:800; margin-bottom:4px;">
-                    💡 Por que está em destaque:
-                </div>
+                <div style="font-size:11.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px;">💡 Por que está em destaque:</div>
                 <div>{reason}</div>
             </div>
             <div class="thermometer" style="margin-top:14px;">
-                <div style="width:{best_info['score']}%; background: linear-gradient(90deg, #00ff88, #00f5ff);
-                    box-shadow: 0 0 15px rgba(0,255,136,0.7);"></div>
+                <div style="width:{best_info['score']}%; background: linear-gradient(90deg, #00ff88, #00f5ff); box-shadow: 0 0 15px rgba(0,255,136,0.7);"></div>
             </div>
             <div style="margin-top:12px;">
-                <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px;">
-                    ⏱️ Distribuição de Gols (1º Tempo vs 2º Tempo)
-                </div>
+                <div style="font-size:10.5px; color:#7a89a8; text-transform:uppercase; letter-spacing:1px; font-weight:800; margin-bottom:4px;">⏱️ Distribuição de Gols (1º Tempo vs 2º Tempo)</div>
                 <div class="dual-bar">
-                    <div class="ht" style="width:{best_info['pct_ht']}%;" title="1º Tempo"></div>
-                    <div class="ft" style="width:{best_info['pct_ft']}%;" title="2º Tempo"></div>
+                    <div class="ht" style="width:{best_info['pct_ht']}%;"></div>
+                    <div class="ft" style="width:{best_info['pct_ft']}%;"></div>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:11px; color:#7a89a8; margin-top:4px;">
                     <span>🔥 HT: {best_info['pct_ht']:.0f}%</span>
                     <span>❄️ FT: {best_info['pct_ft']:.0f}%</span>
                 </div>
             </div>
-            <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px 18px;
-                font-size:13px; color:#f0f5ff;">
+            <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:8px 18px; font-size:13px; color:#f0f5ff;">
                 <span>⚽ Média FT: <b style="color:#00ff88; text-shadow:0 0 10px rgba(0,255,136,0.5);">{best_info['avg_ft']:.2f}</b></span>
                 <span>⏱️ Over 2.5 HT: <b style="color:#b537ff; text-shadow:0 0 10px rgba(181,55,255,0.5);">{best_info['o25_ht'] * 100:.0f}%</b></span>
                 <span>🎯 Over 2.5 FT: <b style="color:#00ff88; text-shadow:0 0 10px rgba(0,255,136,0.5);">{best_info['o25_ft'] * 100:.0f}%</b></span>
@@ -2319,8 +3086,8 @@ def render_radar_tab():
                  'stable': ('➖', 'ESTÁVEL', '#7a89a8')}
     for i, (lg, info) in enumerate(rank[1:], 2):
         md = {2: '🥈', 3: '🥉'}.get(i, f'#{i}')
-        bc = {'OFENSIVA': 'badge-ofensivo', 'EQUILIBRADA': 'badge-equilibrado', 'DEFENSIVA': 'badge-defensivo'}[
-            info['perfil']]
+        bc = {'OFENSIVA': 'badge-ofensivo', 'EQUILIBRADA': 'badge-equilibrado',
+              'DEFENSIVA': 'badge-defensivo'}[info['perfil']]
         t_ic, t_txt, t_cor = trend_map.get(info.get('tendencia', 'stable'), ('➖', 'ESTÁVEL', '#7a89a8'))
         delta_pct = info.get('tendencia_delta', 0) * 100
         delta_txt = f"{delta_pct:+.0f}%" if abs(delta_pct) > 0.5 else ""
@@ -2328,19 +3095,12 @@ def render_radar_tab():
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <span style="font-size:16px; font-weight:800;">{md} {lg}</span>
-                    <span style="font-size:11px; color:#7a89a8; font-weight:700;">
-                        ({info['n']} jogos)
-                    </span>
+                    <span style="font-size:11px; color:#7a89a8; font-weight:700;">({info['n']} jogos)</span>
                     <span class="{bc}">{info['perfil']}</span>
-                    <span style="font-size:11px; color:{t_cor}; font-weight:800;
-                        background: rgba(0,245,255,0.05); padding:4px 10px; border-radius:100px;
-                        border: 1px solid {t_cor}66;">{t_ic} {t_txt} {delta_txt}</span>
-                    <span class="{info['badge_class']}">
-                        {info['tempo_icon']} {info['tendencia_tempo']} ({info['pct_ht']:.0f}% HT)
-                    </span>
+                    <span style="font-size:11px; color:{t_cor}; font-weight:800; background: rgba(0,245,255,0.05); padding:4px 10px; border-radius:100px; border: 1px solid {t_cor}66;">{t_ic} {t_txt} {delta_txt}</span>
+                    <span class="{info['badge_class']}">{info['tempo_icon']} {info['tendencia_tempo']} ({info['pct_ht']:.0f}% HT)</span>
                 </div>
-                <div style="font-size:24px; font-weight:900; color:#00f5ff;
-                    text-shadow: 0 0 14px rgba(0,245,255,0.5);">{info['score']}</div>
+                <div style="font-size:24px; font-weight:900; color:#00f5ff; text-shadow: 0 0 14px rgba(0,245,255,0.5);">{info['score']}</div>
             </div>
             <div class="thermometer"><div style="width:{info['score']}%;"></div></div>
             <div style="margin-top:10px;">
@@ -2353,8 +3113,7 @@ def render_radar_tab():
                     <span>❄️ 2º T: {info['pct_ft']:.0f}%</span>
                 </div>
             </div>
-            <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 16px;
-                font-size:12.5px; color:#7a89a8;">
+            <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px 16px; font-size:12.5px; color:#7a89a8;">
                 <span>Over 2.5 HT: <b style="color:#b537ff;">{info['o25_ht'] * 100:.0f}%</b></span>
                 <span>Over 2.5 FT: <b style="color:#00ff88;">{info['o25_ft'] * 100:.0f}%</b></span>
                 <span>Over 3.5 FT: <b style="color:#00f5ff;">{info['o35_ft'] * 100:.0f}%</b></span>
@@ -2363,272 +3122,351 @@ def render_radar_tab():
             </div>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    rb1, _sp = st.columns([1.2, 6])
-    with rb1:
-        if st.button("⬅️ Voltar ao Menu Principal", key="radar_back_bottom", width='stretch'):
-            st.session_state.page = 'jogos_dia'
-            st.rerun()
+    st.markdown(render_footer_v2(), unsafe_allow_html=True)
 
 
 # ============================================
-# PAGE: JOGOS DO DIA
+# PAGE: INSIGHTS PLAYERS (V2)
 # ============================================
-def page_jogos_do_dia():
-    st.markdown("""<div class="top-hero">
-        <div class="top-hero-left">
-            <span class="top-hero-icon">💀</span>
-            <span class="top-hero-title">E-Soccer <b>Fifa Analytics</b> <span class="top-hero-sep">⚡️</span> <span class="top-hero-dev">@FIFAlgorithm</span></span>
-        </div>
-        <div class="top-hero-right">
-            <span class="methodology-badge">
-                <span class="icon">🧠</span>
-                Probabilidades Baseadas em (Monte Carlo + Dixon-Coles) · 5.000 Simulações por jogo
-            </span>
-            <span class="status-dot"><span class="dot"></span> Online</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
+def render_insights_players_tab():
+    _render_html_safe(render_hero_v2())
 
-    st.markdown('<div class="pill-actions">', unsafe_allow_html=True)
-    ac1, ac2, ac3, _spacer = st.columns([1.1, 1.1, 1.1, 4])
-    with ac1:
-        if st.button("💀 Carregar Dados", key="load_leagues", width='stretch', type="primary"):
-            with st.spinner("Carregando dados..."):
-                try:
-                    st.session_state['_fetch_errors'] = []
-                    ad = {};
-                    dbg = {}
-                    prog = st.progress(0, text="Buscando ligas...")
-                    for i, (ln, li) in enumerate(LEAGUES.items(), 1):
-                        prog.progress(i / len(LEAGUES), text=f"Buscando {ln}...")
-                        m = scraper.get_league_matches(li['id'])
-                        if m:
-                            rs = scraper.extract(m);
-                            dbg[ln] = scraper.last_debug
-                            if rs:
-                                d = pd.DataFrame(rs)
-                                if 'datetime_obj' in d.columns and not d['datetime_obj'].isna().all():
-                                    d = d.sort_values(by='datetime_obj', ascending=False)
-                                else:
-                                    d = d.sort_values(by='time', ascending=False)
-                            else:
-                                d = pd.DataFrame()
-                            ad[ln] = d
-                        else:
-                            ad[ln] = pd.DataFrame();
-                            dbg[ln] = {'matched_today': 0}
-                    prog.empty()
-                    st.session_state['all_data'] = ad
-                    st.session_state['debug_info'] = dbg
-                    total_jogos = sum(len(x) for x in ad.values() if x is not None and not x.empty)
-                    if total_jogos > 0:
-                        st.success(f"✅ {total_jogos} partidas carregadas")
-                    else:
-                        erros = st.session_state.get('_fetch_errors', [])
-                        if erros:
-                            st.warning(f"⚠️ Nenhuma partida carregada.")
-                        else:
-                            st.info("Sem partidas finalizadas hoje ainda.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro inesperado: {e}")
-    with ac2:
-        if st.button("⚡️ Atualizar Jogos", key="load_games", width='stretch'):
-            with st.spinner(f"Atualizando jogos..."):
-                jogos = scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT)
-                if jogos:
-                    st.session_state['aceodds_games'] = jogos
-                    st.session_state['aceodds_last_update'] = datetime.now()
-                    st.session_state.ultima_oportunidade = set()
-
-                    if not st.session_state.get('all_data'):
-                        prog = st.progress(0, text="📚 Carregando dados das ligas automaticamente...")
-                        ad = {};
-                        dbg = {}
-                        for i, (ln, li) in enumerate(LEAGUES.items(), 1):
-                            prog.progress(i / len(LEAGUES), text=f"Buscando {ln}...")
-                            m = scraper.get_league_matches(li['id'])
-                            if m:
-                                rs = scraper.extract(m);
-                                dbg[ln] = scraper.last_debug
-                                if rs:
-                                    d = pd.DataFrame(rs)
-                                    if 'datetime_obj' in d.columns and not d['datetime_obj'].isna().all():
-                                        d = d.sort_values(by='datetime_obj', ascending=False)
-                                    else:
-                                        d = d.sort_values(by='time', ascending=False)
-                                else:
-                                    d = pd.DataFrame()
-                                ad[ln] = d
-                            else:
-                                ad[ln] = pd.DataFrame();
-                                dbg[ln] = {'matched_today': 0}
-                        prog.empty()
-                        st.session_state['all_data'] = ad
-                        st.session_state['debug_info'] = dbg
-                        total_ligas = sum(len(x) for x in ad.values() if x is not None and not x.empty)
-                        st.success(f"✅ {len(jogos)} jogos + {total_ligas} partidas de {len(LEAGUES)} ligas carregadas!")
-                    else:
-                        st.success(f"✅ {len(jogos)} jogos!")
-                    st.rerun()
-                else:
-                    st.error("❌ Não foi possível carregar.")
-    with ac3:
-        if st.button("🔥 Radar FIFA", key="go_radar", width='stretch'):
-            st.session_state.page = 'radar';
-            st.rerun()
+    st.markdown('<div class="nav-v2">', unsafe_allow_html=True)
+    n1, n2, n3, n4 = st.columns(4)
+    with n1:
+        if st.button("⬅️ VOLTAR AO MENU", key="insights_back", width='stretch', type="primary"):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with n2:
+        if st.button("📅 JOGOS DO DIA", key="ins_goto_jogos", width='stretch'):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with n3:
+        if st.button("📡 RADAR FIFA", key="ins_goto_radar", width='stretch'):
+            st.session_state.page = 'radar'; st.rerun()
+    with n4:
+        st.markdown('<div style="padding:13px 16px;text-align:center;font-size:11.5px;font-weight:800;color:#00f5ff;letter-spacing:0.8px;text-transform:uppercase;border:1.5px solid rgba(0,245,255,0.4);border-radius:10px;background:rgba(0,245,255,0.08);">📊 Base: Últimos 10 Jogos</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if (st.session_state.get('aceodds_games')
-            and not st.session_state.get('all_data')):
-        st.markdown("""<div class="warning-banner">
-            <b>⚠️ Dados de liga não carregados</b> — os cards vão mostrar
-            <code>nan</code> / <code>0%</code>. Clique em
-            <b style="color:#00f5ff;">💀 Carregar Dados</b> para gerar as estatísticas completas.
-        </div>""", unsafe_allow_html=True)
-
-    if 'aceodds_games' not in st.session_state or not st.session_state['aceodds_games']:
-        st.markdown("""<div style="background: linear-gradient(90deg, rgba(255,214,0,0.15), rgba(255,140,0,0.08));
-            padding: 16px 20px; border-radius: 10px; border-left: 4px solid #ffd600;
-            color: #f0f5ff; font-size: 14px; margin: 15px 0; box-shadow: 0 0 24px rgba(255,214,0,0.15);">
-            <b style="color:#ffd600; font-size:16px;">⚠️ Atenção</b> — Para dar início, favor clicar em 
-            <b style="color:#00f5ff;">💀 Carregar Dados</b> e, na sequência, 
-            <b style="color:#00f5ff;">⚡️ Atualizar Jogos</b>. Após isso, o Radar FIFA irá disponibilizar os dados.
-        </div>""", unsafe_allow_html=True)
-        return
-
-    df = pd.DataFrame(st.session_state['aceodds_games'])
-    df['competicao'] = df['competicao'].apply(normalize_league_name)
     ad = st.session_state.get('all_data', {})
-    if ad:
-        jc, jf = compute_jc_jf(df, ad, LEAGUES)
-        df['JC'] = jc;
-        df['JF'] = jf
-        with st.spinner("Rodando Monte Carlo..."):
-            r = monte_carlo(df, ad, LEAGUES)
-        for c, v in r.items(): df[c] = v
-        for c in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
-        for c in EXTRA_COLUMNS:
-            if c in df.columns and c not in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
-                df[c] = df[c].fillna('').astype(str)
-        st.session_state['aceodds_games'] = df.to_dict('records')
-    else:
-        df['JC'] = 0;
-        df['JF'] = 0
-        for c in EXTRA_COLUMNS: df[c] = ''
-    novas = check_oportunidades(df)
-    if novas: emitir_alerta(novas)
+    df_ac = st.session_state.get('aceodds_games', None)
 
-    upd = st.session_state.get('aceodds_last_update', datetime.now()).strftime('%H:%M')
-    st.markdown(f"""<div class="stat-mini-row">
-        <div class="stat-mini">
-            <div class="sm-icon">⚽️</div>
-            <div class="sm-info">
-                <div class="sm-lbl">Jogos Disponíveis</div>
-                <div class="sm-val">{len(df)}</div>
+    if not ad:
+        st.markdown("""<div class="warning-banner">
+            <b>⚠️ Dados não carregados</b> — Volte para <b>📅 Jogos do Dia</b> e clique em <b>💀 Carregar Dados</b>.
+        </div>""", unsafe_allow_html=True)
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+
+    st.markdown('<div class="section-label">🎯 Filtros</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns([2, 2])
+    with c1:
+        ligas_disp = sorted(ad.keys())
+        liga_sel = st.selectbox("📌 Liga", ligas_disp, key='insights_liga_v5')
+    with c2:
+        apenas_hoje = st.toggle("🎮 Apenas players que jogam hoje", value=True, key='insights_so_hoje_v5')
+
+    ldf = ad.get(liga_sel, pd.DataFrame())
+    if ldf.empty:
+        st.warning(f"Sem dados para **{liga_sel}**.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+
+    players_set = set()
+    if apenas_hoje and df_ac is not None and not (isinstance(df_ac, list) and len(df_ac) == 0):
+        if isinstance(df_ac, list): df_ac = pd.DataFrame(df_ac)
+        df_ac = df_ac.copy()
+        df_ac['competicao'] = df_ac['competicao'].apply(normalize_league_name)
+        df_liga_hoje = df_ac[df_ac['competicao'] == liga_sel]
+        for _, r in df_liga_hoje.iterrows():
+            h = str(r.get('casa', '')).strip(); a = str(r.get('fora', '')).strip()
+            if h: players_set.add(h)
+            if a: players_set.add(a)
+    if not players_set:
+        for _, r in ldf.iterrows():
+            h = str(r.get('home_team', '')).strip(); a = str(r.get('away_team', '')).strip()
+            if h: players_set.add(h)
+            if a: players_set.add(a)
+    if not players_set:
+        st.info("Sem players para analisar.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+
+    with st.spinner("Calculando ranking (últimos 10 jogos)..."):
+        ranking = []
+        for p in players_set:
+            s = compute_player_ranking_stats(ldf, p)
+            if s and s['J'] > 0: ranking.append(s)
+    if not ranking:
+        st.info("Sem dados suficientes.")
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+    ranking.sort(key=lambda x: -x['ppj'])
+
+    upd = datetime.now().strftime('%H:%M')
+    st.markdown(f"""<div class="info-v2-row">
+        <div class="info-v2-card">
+            <div class="info-v2-icon">🎮</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">PLAYERS</div>
+                <div class="info-v2-value">{len(ranking)}</div>
             </div>
         </div>
-        <div class="stat-mini">
-            <div class="sm-icon">🕐</div>
-            <div class="sm-info">
-                <div class="sm-lbl">Última Atualização</div>
-                <div class="sm-val time">{upd}</div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">🕐</div>
+            <div class="info-v2-content" style="flex:1;">
+                <div class="info-v2-label" style="color:#00f5ff;">LIGA SELECIONADA</div>
+                <div class="info-v2-prob-text">{liga_sel}</div>
             </div>
+            <div class="info-v2-online"><span class="info-v2-dot"></span> {upd}</div>
         </div>
     </div>""", unsafe_allow_html=True)
 
-    fc1, _spacer = st.columns([2.4, 5])
-    with fc1:
-        liga_opts = ['🎮 Escolher Liga'] + [f"{info['icon']} {lg}" for lg, info in LEAGUES.items()]
-        liga_sel = st.selectbox("Liga", liga_opts, key='sel_liga', label_visibility='collapsed')
-        if liga_sel == '🎮 Escolher Liga':
-            f_liga = '(todas)'
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("📄 Gerar PDF do Ranking", key="insights_pdf_btn_v5", width='stretch', type="primary"):
+            with st.spinner("Gerando PDF..."):
+                try:
+                    st.session_state['insights_pdf_bytes'] = generate_insights_players_pdf(ranking, liga_sel)
+                    st.success("✅ PDF gerado!")
+                except Exception as e: st.error(f"Erro: {e}")
+    with c2:
+        if 'insights_pdf_bytes' in st.session_state:
+            st.download_button("📥 Baixar PDF", data=st.session_state['insights_pdf_bytes'],
+                               file_name=f"ranking_players_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
+                               mime="application/pdf", width='stretch')
+
+    st.markdown('<div class="section-label">🏆 Tabela 1 — Performance Geral (J · Forma · PPJ · Médias)</div>', unsafe_allow_html=True)
+
+    def cor_gp(v):
+        if v >= 2.5: return '#00ff88'
+        if v >= 2.0: return '#00f5ff'
+        if v >= 1.5: return '#ffd600'
+        if v >= 1.0: return '#ff8c00'
+        return '#ff2e88'
+
+    def cor_gc(v):
+        if v <= 1.0: return '#00ff88'
+        if v <= 1.5: return '#00f5ff'
+        if v <= 2.0: return '#ffd600'
+        if v <= 2.5: return '#ff8c00'
+        return '#ff2e88'
+
+    rows = ''
+    for idx, r in enumerate(ranking, 1):
+        ppj = r['ppj']
+        if ppj >= 2.5: ppj_c = '#00ff88'
+        elif ppj >= 2.0: ppj_c = '#00f5ff'
+        elif ppj >= 1.5: ppj_c = '#ffd600'
+        elif ppj >= 1.0: ppj_c = '#ff8c00'
+        else: ppj_c = '#ff2e88'
+        md = '🥇' if idx == 1 else ('🥈' if idx == 2 else ('🥉' if idx == 3 else f'<span style="color:#7a89a8;">#{idx}</span>'))
+        form_html = ''
+        for f in r['form']:
+            if f == 'V': bg, fc, sh = '#00ff88', '#05070f', 'rgba(0,255,136,0.7)'
+            elif f == 'E': bg, fc, sh = '#ffd600', '#05070f', 'rgba(255,214,0,0.7)'
+            else: bg, fc, sh = '#ff2e88', '#ffffff', 'rgba(255,46,136,0.7)'
+            form_html += (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+                          f'width:17px;height:17px;border-radius:50%;background:{bg};color:{fc};'
+                          f'font-size:9px;font-weight:900;font-family:\'JetBrains Mono\',monospace;'
+                          f'margin:0 1.5px;box-shadow:0 0 8px {sh};line-height:1;flex-shrink:0;">{f}</span>')
+        rows += f'''<div class="rank-row r1">
+            <div class="rank-pos">{md}</div>
+            <div class="rank-name">{r['player'][:16]}</div>
+            <div class="rank-num">{r['J']}</div>
+            <div class="rank-form">{form_html}</div>
+            <div class="rank-num" style="color:{ppj_c};font-weight:900;font-size:15px;">{ppj:.2f}</div>
+            <div class="rank-num" style="color:{cor_gp(r['avg_gp_5'])};">{r['avg_gp_5']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gp(r['avg_gp_10'])};">{r['avg_gp_10']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gc(r['avg_gc_5'])};">{r['avg_gc_5']:.2f}</div>
+            <div class="rank-num" style="color:{cor_gc(r['avg_gc_10'])};">{r['avg_gc_10']:.2f}</div>
+        </div>'''
+    header = '''<div class="rank-header r1">
+        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
+        <div class="rank-hcell">J</div><div class="rank-hcell">Forma (10)</div>
+        <div class="rank-hcell">PPJ</div><div class="rank-hcell">GP 5j</div>
+        <div class="rank-hcell">GP 10j</div><div class="rank-hcell">GC 5j</div>
+        <div class="rank-hcell">GC 10j</div></div>'''
+    _render_html_safe(f'<div class="rank-list">{header}{rows}</div>')
+
+    st.markdown('<div class="section-label">⏱️ Tabela 2 — Mercados HT (1º Tempo)</div>', unsafe_allow_html=True)
+    def cor_pct(p):
+        pct = p * 100
+        if pct >= 80: return '#00ff88'
+        if pct >= 60: return '#00f5ff'
+        if pct >= 40: return '#ffd600'
+        if pct >= 20: return '#ff8c00'
+        return '#7a89a8'
+    rows2 = ''
+    for idx, r in enumerate(ranking, 1):
+        rows2 += f'''<div class="rank-row r2">
+            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-name">{r['player'][:16]}</div>
+            <div class="rank-num">{r['J']}</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_05_ht'])};">{r['over_05_ht']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_15_ht'])};">{r['over_15_ht']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_25_ht'])};">{r['over_25_ht']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['btts_ht'])};">{r['btts_ht']*100:.0f}%</div>
+        </div>'''
+    header2 = '''<div class="rank-header r2">
+        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
+        <div class="rank-hcell">J</div><div class="rank-hcell">O 0.5 HT</div>
+        <div class="rank-hcell">O 1.5 HT</div><div class="rank-hcell">O 2.5 HT</div>
+        <div class="rank-hcell">BTTS HT</div></div>'''
+    _render_html_safe(f'<div class="rank-list">{header2}{rows2}</div>')
+
+    st.markdown('<div class="section-label">⚽ Tabela 3 — Mercados FT (Jogo Completo)</div>', unsafe_allow_html=True)
+    rows3 = ''
+    for idx, r in enumerate(ranking, 1):
+        rows3 += f'''<div class="rank-row r3">
+            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-name">{r['player'][:16]}</div>
+            <div class="rank-num">{r['J']}</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_05_ft'])};">{r['over_05_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_15_ft'])};">{r['over_15_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_25_ft'])};">{r['over_25_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_35_ft'])};">{r['over_35_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_45_ft'])};">{r['over_45_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['over_55_ft'])};">{r['over_55_ft']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['btts_ft'])};">{r['btts_ft']*100:.0f}%</div>
+        </div>'''
+    header3 = '''<div class="rank-header r3">
+        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
+        <div class="rank-hcell">J</div><div class="rank-hcell">O 0.5 FT</div>
+        <div class="rank-hcell">O 1.5 FT</div><div class="rank-hcell">O 2.5 FT</div>
+        <div class="rank-hcell">O 3.5 FT</div><div class="rank-hcell">O 4.5 FT</div>
+        <div class="rank-hcell">O 5.5 FT</div><div class="rank-hcell">BTTS FT</div></div>'''
+    _render_html_safe(f'<div class="rank-list">{header3}{rows3}</div>')
+
+    st.markdown('<div class="section-label">🎯 Tabela 4 — Gols Individuais do Player</div>', unsafe_allow_html=True)
+    rows4 = ''
+    for idx, r in enumerate(ranking, 1):
+        rows4 += f'''<div class="rank-row r4">
+            <div class="rank-num" style="color:#7a89a8;font-size:11px;">{idx}</div>
+            <div class="rank-name">{r['player'][:16]}</div>
+            <div class="rank-num">{r['J']}</div>
+            <div class="rank-num" style="color:#00f5ff;">{r['avg_gp_10']:.2f}</div>
+            <div class="rank-num" style="color:{cor_pct(r['player_over_15'])};">{r['player_over_15']*100:.0f}%</div>
+            <div class="rank-num" style="color:{cor_pct(r['player_over_25'])};">{r['player_over_25']*100:.0f}%</div>
+        </div>'''
+    header4 = '''<div class="rank-header r4">
+        <div class="rank-hcell">#</div><div class="rank-hcell">Jogador</div>
+        <div class="rank-hcell">J</div><div class="rank-hcell">Méd GP</div>
+        <div class="rank-hcell">Marcou +1.5</div><div class="rank-hcell">Marcou +2.5</div></div>'''
+    _render_html_safe(f'<div class="rank-list">{header4}{rows4}</div>')
+
+    st.markdown('<div class="section-label">⭐ Destaques da Liga</div>', unsafe_allow_html=True)
+    best_ppj = ranking[0]
+    best_atk = sorted(ranking, key=lambda x: -x['avg_gp_10'])[0]
+    best_def = sorted(ranking, key=lambda x: x['avg_gc_10'])[0]
+    best_over = sorted(ranking, key=lambda x: -x['over_35_ft'])[0]
+    worst_atk = sorted(ranking, key=lambda x: x['avg_gp_10'])[0]
+    worst_def = sorted(ranking, key=lambda x: -x['avg_gc_10'])[0]
+
+    def card(title, icon, player, lines, kind='good'):
+        if kind == 'good':
+            border_c = '#00ff88'; bg_grad = 'rgba(0,255,136,0.08)'; label_c = '#00ff88'
+        elif kind == 'bad':
+            border_c = '#ff2e88'; bg_grad = 'rgba(255,46,136,0.08)'; label_c = '#ff2e88'
         else:
-            f_liga = '(todas)'
-            for lg in LEAGUES.keys():
-                if lg in liga_sel: f_liga = lg; break
+            border_c = '#00f5ff'; bg_grad = 'rgba(0,245,255,0.06)'; label_c = '#00f5ff'
+        rows_html = ''
+        for label, value, cor in lines:
+            rows_html += f'<div class="lp-row"><span>{label}</span><b style="color:{cor};font-size:15px;">{value}</b></div>'
+        return f'''<div class="lp-market-card" style="border-color:{border_c}55;background:linear-gradient(135deg, {bg_grad} 0%, rgba(0,245,255,0.03) 100%);box-shadow:0 0 24px {border_c}22;height:100%;">
+            <div class="lp-title" style="color:{label_c};"><span style="font-size:16px;">{icon}</span> {title}</div>
+            <div style="font-size:17px;font-weight:900;color:#f0f5ff;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{player}</div>
+            {rows_html}</div>'''
 
-    df_f = df.copy()
-    if f_liga != '(todas)': df_f = df_f[df_f['competicao'] == f_liga]
-    if df_f.empty:
-        st.info("Nenhum jogo atende aos filtros.")
-        return
+    st.markdown('<div style="font-size:11.5px;font-weight:900;color:#00ff88;margin:8px 0 8px 0;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 10px rgba(0,255,136,0.5);">✅ Melhores da Liga</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(card('MELHOR PPJ', '🥇', best_ppj['player'],
+                         [('Pontos por Jogo', f"{best_ppj['ppj']:.2f}", '#00ff88'),
+                          ('Jogos', best_ppj['J'], '#f0f5ff'),
+                          ('V / E / D', f"{best_ppj['V']}/{best_ppj['E']}/{best_ppj['D']}", '#f0f5ff')], kind='good'), unsafe_allow_html=True)
+    with c2:
+        st.markdown(card('MELHOR ATAQUE', '⚔️', best_atk['player'],
+                         [('Média Gols Pró', f"{best_atk['avg_gp_10']:.2f}", '#00ff88'),
+                          ('Total GP (10j)', best_atk['GP'], '#f0f5ff'),
+                          ('Média 5j', f"{best_atk['avg_gp_5']:.2f}", '#00f5ff')], kind='good'), unsafe_allow_html=True)
+    with c3:
+        st.markdown(card('MELHOR DEFESA', '🛡️', best_def['player'],
+                         [('Média Gols Contra', f"{best_def['avg_gc_10']:.2f}", '#00ff88'),
+                          ('Total GC (10j)', best_def['GC'], '#f0f5ff'),
+                          ('Média 5j', f"{best_def['avg_gc_5']:.2f}", '#00f5ff')], kind='good'), unsafe_allow_html=True)
+    with c4:
+        st.markdown(card('MELHOR P/ OVER GOLS', '🎯', best_over['player'],
+                         [('% Jogos c/ 4+ Gols', f"{best_over['over_35_ft']*100:.0f}%", '#00ff88'),
+                          ('% Over 2.5 FT', f"{best_over['over_25_ft']*100:.0f}%", '#00f5ff'),
+                          ('Média Gols/Jogo', f"{(best_over['avg_gp_10'] + best_over['avg_gc_10']):.2f}", '#ffd600')], kind='good'), unsafe_allow_html=True)
 
-    st.markdown(render_card_header(), unsafe_allow_html=True)
-    st.markdown('<div class="mc-list">', unsafe_allow_html=True)
-    for i, (_, row) in enumerate(df_f.iterrows()):
-        casa_raw = str(row.get('casa', ''))
-        fora_raw = str(row.get('fora', ''))
-        lk = find_league_key(row.get('competicao', ''), LEAGUES)
-        ldf = ad.get(lk) if lk and lk in ad else None
-        st.markdown(render_card_row(row, casa_raw, fora_raw, ldf=ldf), unsafe_allow_html=True)
-        with st.expander(f"🔍 Ver análise completa — {casa_raw} × {fora_raw}", expanded=False):
-            render_match_card(row, ad, LEAGUES, idx=i)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:11.5px;font-weight:900;color:#ff2e88;margin:14px 0 8px 0;letter-spacing:1px;text-transform:uppercase;text-shadow:0 0 10px rgba(255,46,136,0.5);">⚠️ Piores da Liga</div>', unsafe_allow_html=True)
+    c5, c6 = st.columns(2)
+    with c5:
+        st.markdown(card('PIOR ATAQUE', '📉', worst_atk['player'],
+                         [('Média Gols Pró', f"{worst_atk['avg_gp_10']:.2f}", '#ff2e88'),
+                          ('Total GP (10j)', worst_atk['GP'], '#f0f5ff'),
+                          ('Média 5j', f"{worst_atk['avg_gp_5']:.2f}", '#ff8c00')], kind='bad'), unsafe_allow_html=True)
+    with c6:
+        st.markdown(card('PIOR DEFESA', '🚨', worst_def['player'],
+                         [('Média Gols Contra', f"{worst_def['avg_gc_10']:.2f}", '#ff2e88'),
+                          ('Total GC (10j)', worst_def['GC'], '#f0f5ff'),
+                          ('Média 5j', f"{worst_def['avg_gc_5']:.2f}", '#ff8c00')], kind='bad'), unsafe_allow_html=True)
 
-    with st.expander("📊 Ver tabela completa + Downloads", expanded=False):
-        cols = ['hora', 'competicao', 'casa', 'fora',
-                'Gols HT', 'Gols FT', 'Linha Seg FT',
-                'Over 0.5 HT', 'Over 1.5 HT', 'Over 2.5 HT',
-                'Over 0.5 FT', 'Over 1.5 FT', 'Over 2.5 FT',
-                'Over 3.5 FT', 'Over 4.5 FT', 'Over 5.5 FT', 'BTTS FT']
-        df_sum = df_f[[c for c in cols if c in df_f.columns]]
-        st.dataframe(df_sum, width='stretch', hide_index=True, height=400)
-        c1, c2 = st.columns(2)
-        with c1:
-            csv = df_sum.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 CSV", data=csv,
-                               file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                               mime="text/csv", width='stretch')
-        with c2:
-            try:
-                pdf = generate_pdf(df_sum, "E-Soccer — Jogos do Dia")
-                st.download_button("📄 PDF", data=pdf,
-                                   file_name=f"esoccer_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                                   mime="application/pdf", width='stretch')
-            except Exception as e:
-                st.warning(f"PDF: {e}")
+    st.markdown(render_footer_v2(), unsafe_allow_html=True)
 
 
 # ============================================
 # PAGE: LIGA INDIVIDUAL
 # ============================================
 def page_liga(league_name):
-    st.markdown(f"""<div class="top-hero">
-        <div class="top-hero-left">
-            <span class="top-hero-icon">💀</span>
-            <span class="top-hero-title">E-Soccer <b>Fifa Analytics</b> <span class="top-hero-sep">⚡️</span> <span class="top-hero-dev">@FIFAlgorithm</span></span>
-        </div>
-        <div class="top-hero-right">
-            <span class="methodology-badge">
-                <span class="icon">🧠</span>
-                Probabilidades Baseadas em (Monte Carlo + Dixon-Coles) · 5.000 Simulações por jogo
-            </span>
-            <span class="status-dot"><span class="dot"></span> Online</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
+    _render_html_safe(render_hero_v2())
+
+    st.markdown('<div class="nav-v2">', unsafe_allow_html=True)
+    n1, n2, n3, n4 = st.columns(4)
+    with n1:
+        if st.button("⬅️ VOLTAR AO MENU", key=f"liga_back_{league_name}", width='stretch', type="primary"):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with n2:
+        if st.button("📅 JOGOS DO DIA", key=f"liga_jogos_{league_name}", width='stretch'):
+            st.session_state.page = 'jogos_dia'; st.rerun()
+    with n3:
+        if st.button("📡 RADAR FIFA", key=f"liga_radar_{league_name}", width='stretch'):
+            st.session_state.page = 'radar'; st.rerun()
+    with n4:
+        if st.button("🧠 INSIGHTS PLAYERS", key=f"liga_ins_{league_name}", width='stretch'):
+            st.session_state.page = 'insights_players'; st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
     d = st.session_state.get('all_data', {}).get(league_name, pd.DataFrame())
     if d.empty:
         st.info(f"Sem partidas finalizadas para **{league_name}** hoje.")
-        return
-    st.caption(f"{len(d)} partidas finalizadas")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown(f"""<div class="stat-card"><div class="sc-icon">📊</div>
-            <div class="sc-val">{len(d)}</div><div class="sc-label">Total</div></div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""<div class="stat-card"><div class="sc-icon">✅</div>
-            <div class="sc-val">100%</div><div class="sc-label">Fin.</div></div>""", unsafe_allow_html=True)
-    with c3:
-        tg = int(d['home_score'].sum() + d['away_score'].sum())
-        st.markdown(f"""<div class="stat-card"><div class="sc-icon">⚽</div>
-            <div class="sc-val">{tg}</div><div class="sc-label">Gols</div></div>""", unsafe_allow_html=True)
-    with c4:
-        ag = (d['home_score'] + d['away_score']).mean()
-        st.markdown(f"""<div class="stat-card"><div class="sc-icon">📈</div>
-            <div class="sc-val">{ag:.2f}</div><div class="sc-label">Média</div></div>""", unsafe_allow_html=True)
-    dd = d.copy();
+        st.markdown(render_footer_v2(), unsafe_allow_html=True); return
+
+    tg = int(d['home_score'].sum() + d['away_score'].sum())
+    ag = (d['home_score'] + d['away_score']).mean()
+    st.markdown(f"""<div class="info-v2-row">
+        <div class="info-v2-card">
+            <div class="info-v2-icon">📊</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">TOTAL DE PARTIDAS</div>
+                <div class="info-v2-value">{len(d)}</div>
+            </div>
+        </div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">⚽</div>
+            <div class="info-v2-content">
+                <div class="info-v2-label">TOTAL DE GOLS</div>
+                <div class="info-v2-value purple">{tg}</div>
+                <div class="info-v2-sub">Média {ag:.2f}/jogo</div>
+            </div>
+        </div>
+        <div class="info-v2-card">
+            <div class="info-v2-icon">✅</div>
+            <div class="info-v2-content" style="flex:1;">
+                <div class="info-v2-label" style="color:#00f5ff;">STATUS DA LIGA</div>
+                <div class="info-v2-prob-text">100% FINALIZADAS · HOJE</div>
+            </div>
+            <div class="info-v2-online"><span class="info-v2-dot"></span> ONLINE</div>
+        </div>
+    </div>""", unsafe_allow_html=True)
+
+    dd = d.copy()
     dd['sl'] = '✅'
     dd['hh'] = dd['ht_home'].fillna('-').astype(str)
     dd['ha'] = dd['ht_away'].fillna('-').astype(str)
@@ -2638,19 +3476,16 @@ def page_liga(league_name):
           'hh': 'HT Casa', 'ha': 'HT Fora', 'sl': '📌'}
     st.dataframe(dd[cs].rename(columns=cm), width='stretch', hide_index=True, height=500)
 
+    st.markdown(render_footer_v2(), unsafe_allow_html=True)
+
 
 # ============================================
 # GLOBAL + SIDEBAR
 # ============================================
-# ── BLOQUEIO DE LOGIN ──
-if not st.session_state.autenticado:
-    render_login()
-    st.stop()
-
 scraper = EFootballScraper()
 with st.sidebar:
     st.markdown("""<div class="sb-brand">
-        <div class="sb-logo">💀</div>
+        <div class="sb-logo">🤖</div>
         <div>
             <div class="sb-brand-name">FIFAlgorithm</div>
             <div class="sb-brand-sub">E-Soccer Analytics</div>
@@ -2660,51 +3495,34 @@ with st.sidebar:
     nav_items = [
         ('jogos_dia', '📅 Jogos do Dia'),
         ('radar', '📡 Radar FIFA'),
+        ('insights_players', '🧠 Insights Players'),
     ]
     for key, label in nav_items:
         active = st.session_state.page == key
         if st.button(label, key=f'nav_{key}', width='stretch',
                      type='primary' if active else 'secondary'):
-            st.session_state.page = key;
-            st.rerun()
+            st.session_state.page = key; st.rerun()
     st.markdown('<div class="sb-section">LIGAS</div>', unsafe_allow_html=True)
     for lg_name, lg_info in LEAGUES.items():
         key = f'liga_{lg_name}'
         active = st.session_state.page == key
         if st.button(f"{lg_info['icon']} {lg_name}", key=f'nav_{key}', width='stretch',
                      type='primary' if active else 'secondary'):
-            st.session_state.page = key;
-            st.rerun()
+            st.session_state.page = key; st.rerun()
     st.markdown("---")
     modo = st.toggle("☀️ Modo Claro", value=st.session_state.modo_claro, key='toggle_modo')
     if modo != st.session_state.modo_claro:
-        st.session_state.modo_claro = modo;
-        st.rerun()
+        st.session_state.modo_claro = modo; st.rerun()
     st.session_state.som_ativo = st.toggle("🔊 Som", value=st.session_state.som_ativo, key='toggle_som')
     st.session_state.notif_alerta = st.toggle("🔔 Notificações", value=st.session_state.notif_alerta, key='toggle_notif')
     if st.button("🔔 Testar Alerta", width='stretch'):
-        play_alert_sound();
-        st.toast("🎯 Teste!", icon="🚨")
+        play_alert_sound(); st.toast("🎯 Teste!", icon="🚨")
     if st.button("🌐 Testar Conexão 24live", width='stretch'):
         ok, msg = test_24live_connectivity()
-        if ok:
-            st.success(f"✅ {msg}")
-        else:
-            st.error(f"❌ {msg}")
-
-    # ── LOGOUT ──
-    st.markdown("---")
-    st.markdown(
-        f'<div style="font-size:11px; color:#7a89a8; text-align:center; padding:4px 0;">'
-        f'Logado como <b style="color:#00f5ff;">{st.session_state.usuario_logado}</b></div>',
-        unsafe_allow_html=True)
-    if st.button("🚪 Sair", width='stretch', key='logout_btn'):
-        st.session_state.autenticado = False
-        st.session_state.usuario_logado = ''
-        st.rerun()
-
+        if ok: st.success(f"✅ {msg}")
+        else: st.error(f"❌ {msg}")
     st.markdown(f"""<div class="sb-footer">
-        FIFAlgorithm v6.5.8 - Streamlit
+        FIFAlgorithm v6.12.0 - Streamlit
         <div class="sb-footer-user">
             <div class="sb-avatar">V</div>
             <div>
@@ -2720,6 +3538,8 @@ with st.sidebar:
 page = st.session_state.get('page', 'jogos_dia')
 if page == 'jogos_dia':
     page_jogos_do_dia()
+elif page == 'insights_players':
+    render_insights_players_tab()
 elif page == 'radar':
     render_radar_tab()
 elif page.startswith('liga_'):
@@ -2727,5 +3547,3 @@ elif page.startswith('liga_'):
     if lg_name in LEAGUES: page_liga(lg_name)
 else:
     page_jogos_do_dia()
-st.markdown("---")
-st.caption("💀 E-Soccer Fifa Analytics ⚡️ @FIFAlgorithm")

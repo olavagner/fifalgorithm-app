@@ -1,7 +1,30 @@
+# Streamlit
 .streamlit/secrets.toml
+
+# Python
 __pycache__/
+*.py[cod]
 *.pyc
+
+# Ambientes virtuais
 .venv/
 venv/
-.DS_Store
+env/
 
+# IDEs
+.idea/
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Dados locais / não versionar
+backtest.db
+*.db
+diagnostico_24live/
+efootball_results.csv
+efootball_results.json
+
+# Logs
+*.log
