@@ -1,5 +1,5 @@
-# app.py — E-Soccer Fifa Analytics v6.12.0
-# (Hero IN ALGORITHM WE TRUST + Remoção de cards + Cache do Monte Carlo)
+# app.py — E-Soccer Fifa Analytics v6.12.1
+# (Cache MC + Hero IN ALGORITHM + Debug V2 teste API 24live)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -235,14 +235,6 @@ section.main > div:first-child {{ padding-top: 0 !important; margin-top: 0 !impo
     box-shadow: 0 0 24px rgba(255,214,0,0.15);
 }}
 .warning-banner b {{ color: #ffd600; }}
-.warning-banner code {{
-    background: rgba(0,0,0,0.4);
-    padding: 1px 6px;
-    border-radius: 4px;
-    color: {accent};
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-}}
 
 div[data-baseweb="select"] > div {{ background: {bg_card2} !important; border: 1px solid {border} !important;
     border-radius: 8px !important; color: {txt} !important; min-height: 32px !important;
@@ -285,24 +277,17 @@ div[data-baseweb="input"] input {{ background: {bg_card2} !important; border: 1p
     cursor: pointer !important; margin: 2px 0 !important;
     list-style: none !important;
 }}
-.streamlit-expanderHeader:hover, details > summary:hover {{
-    border-color: {accent} !important; color: {accent} !important;
-    box-shadow: 0 0 16px rgba(0,245,255,0.2) !important;
-}}
 details[open] > summary {{
     border-color: {accent} !important; color: {accent} !important;
     background: rgba(0,245,255,0.08) !important; margin-bottom: 8px !important;
     box-shadow: 0 0 16px rgba(0,245,255,0.2) !important;
 }}
-details[open] > summary svg {{ color: {accent} !important; fill: {accent} !important; }}
 
 .h2h-card {{
     background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.95));
     border: 1px solid rgba(0,245,255,0.3);
-    border-radius: 14px;
-    padding: 18px 20px;
-    margin-top: 10px;
-    margin-bottom: 20px;
+    border-radius: 14px; padding: 18px 20px;
+    margin-top: 10px; margin-bottom: 20px;
     box-shadow: 0 0 30px rgba(0,245,255,0.1), inset 0 0 30px rgba(0,245,255,0.02);
 }}
 .h2h-header {{
@@ -312,82 +297,42 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
 }}
 .h2h-team {{ display: flex; flex-direction: column; gap: 6px; flex: 1; }}
 .h2h-team.right {{ align-items: flex-end; text-align: right; }}
-.h2h-team-name {{
-    font-size: 20px; font-weight: 900; color: #f0f5ff;
-    letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;
-}}
+.h2h-team-name {{ font-size: 20px; font-weight: 900; color: #f0f5ff;
+    letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }}
 .h2h-team.right .h2h-team-name {{ flex-direction: row-reverse; }}
 .h2h-team-form {{ display: flex; gap: 4px; }}
-.h2h-match-info {{
-    text-align: center; display: flex;
-    flex-direction: column; gap: 4px; padding: 0 20px;
-}}
-.h2h-match-info .vs {{
-    font-size: 24px; font-weight: 900; color: #00f5ff;
-    text-shadow: 0 0 14px rgba(0,245,255,0.6);
-}}
-.h2h-match-info .league {{
-    font-size: 10px; color: #7a89a8; font-weight: 800;
-    text-transform: uppercase; letter-spacing: 1px;
-}}
-.h2h-ppj-matchup {{
-    display: flex; justify-content: center; align-items: center;
-    gap: 12px; margin-top: 4px;
-    padding: 6px 14px; border-radius: 100px;
-    background: rgba(0,245,255,0.06);
-    border: 1px solid rgba(0,245,255,0.2);
-    font-family: 'JetBrains Mono', monospace;
-}}
+.h2h-match-info {{ text-align: center; display: flex;
+    flex-direction: column; gap: 4px; padding: 0 20px; }}
+.h2h-match-info .vs {{ font-size: 24px; font-weight: 900; color: #00f5ff;
+    text-shadow: 0 0 14px rgba(0,245,255,0.6); }}
+.h2h-match-info .league {{ font-size: 10px; color: #7a89a8; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1px; }}
+.h2h-ppj-matchup {{ display: flex; justify-content: center; align-items: center;
+    gap: 12px; margin-top: 4px; padding: 6px 14px; border-radius: 100px;
+    background: rgba(0,245,255,0.06); border: 1px solid rgba(0,245,255,0.2);
+    font-family: 'JetBrains Mono', monospace; }}
 .h2h-ppj-matchup .val {{ font-size: 15px; font-weight: 900; }}
 .h2h-ppj-matchup .sep {{ color: #7a89a8; font-weight: 700; }}
 .h2h-table {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
 .h2h-col {{ display: flex; flex-direction: column; gap: 8px; }}
-.h2h-row {{
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 0; border-bottom: 1px solid rgba(0,245,255,0.05);
-}}
-.h2h-row:last-child {{ border-bottom: none; }}
-.h2h-row-label {{
-    font-size: 10.5px; color: #7a89a8; font-weight: 700;
-    width: 105px; flex-shrink: 0;
-    text-transform: uppercase; letter-spacing: 0.5px;
-}}
-.h2h-row-seq {{
-    display: flex; gap: 4px; flex: 1; justify-content: center;
-    flex-wrap: nowrap; overflow: hidden;
-}}
-.h2h-seq-item {{
-    width: 22px; height: 22px; border-radius: 6px;
+.h2h-row {{ display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0; border-bottom: 1px solid rgba(0,245,255,0.05); }}
+.h2h-row-label {{ font-size: 10.5px; color: #7a89a8; font-weight: 700;
+    width: 105px; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; }}
+.h2h-row-seq {{ display: flex; gap: 4px; flex: 1; justify-content: center; flex-wrap: nowrap; overflow: hidden; }}
+.h2h-seq-item {{ width: 22px; height: 22px; border-radius: 6px;
     font-size: 10.5px; font-weight: 800;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0,245,255,0.08);
-    border: 1px solid rgba(0,245,255,0.2);
-    color: #f0f5ff;
-    font-family: 'JetBrains Mono', monospace;
-    flex-shrink: 0;
-}}
-.h2h-seq-item.highlight {{
-    background: rgba(0,255,136,0.15);
-    border-color: rgba(0,255,136,0.5);
-    color: #00ff88;
-}}
-.h2h-seq-item.ht-hl {{
-    background: rgba(181,55,255,0.15);
-    border-color: rgba(181,55,255,0.5);
-    color: #c77dff;
-}}
-.h2h-row-avg {{
-    font-size: 13px; font-weight: 900; color: #00f5ff;
-    font-family: 'JetBrains Mono', monospace;
-    width: 42px; text-align: right; flex-shrink: 0;
-}}
+    background: rgba(0,245,255,0.08); border: 1px solid rgba(0,245,255,0.2);
+    color: #f0f5ff; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }}
+.h2h-seq-item.highlight {{ background: rgba(0,255,136,0.15);
+    border-color: rgba(0,255,136,0.5); color: #00ff88; }}
+.h2h-seq-item.ht-hl {{ background: rgba(181,55,255,0.15);
+    border-color: rgba(181,55,255,0.5); color: #c77dff; }}
+.h2h-row-avg {{ font-size: 13px; font-weight: 900; color: #00f5ff;
+    font-family: 'JetBrains Mono', monospace; width: 42px; text-align: right; flex-shrink: 0; }}
 .h2h-row-avg.ht {{ color: #b537ff; }}
 .h2h-row-avg.ft {{ color: #00ff88; }}
-
-.insight-box {{ background: linear-gradient(90deg, rgba(255,214,0,0.1) 0%, rgba(255,214,0,0.02) 100%);
-    padding: 12px 16px; border-radius: 10px; border-left: 3px solid #ffd600;
-    font-size: 14px; margin-top: 10px; color: {txt}; line-height: 1.7;
-    box-shadow: 0 0 20px rgba(255,214,0,0.1); }}
 
 .league-card {{ padding: 14px 18px; margin: 8px 0; border-radius: 12px;
     background: {bg_card2}; border: 1px solid {border}; border-left: 3px solid {accent};
@@ -397,33 +342,21 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     background: linear-gradient(135deg, rgba(0,255,136,0.12) 0%, rgba(0,245,255,0.08) 100%);
     border: 2px solid rgba(0,255,136,0.55);
     box-shadow: 0 0 40px rgba(0,255,136,0.35), inset 0 0 40px rgba(0,255,136,0.08);
-    position: relative;
-    overflow: hidden;
+    position: relative; overflow: hidden;
     animation: glow-best 2.5s ease-in-out infinite alternate;
 }}
 @keyframes glow-best {{
     0% {{ box-shadow: 0 0 40px rgba(0,255,136,0.35), inset 0 0 40px rgba(0,255,136,0.08); }}
     100% {{ box-shadow: 0 0 60px rgba(0,255,136,0.6), inset 0 0 50px rgba(0,255,136,0.15); }}
 }}
-.best-badge {{
-    display: inline-flex; align-items: center; gap: 6px;
+.best-badge {{ display: inline-flex; align-items: center; gap: 6px;
     padding: 5px 14px; border-radius: 100px;
-    background: linear-gradient(135deg, #00ff88, #00cc6a);
-    color: #05070f;
-    font-size: 11px; font-weight: 900;
-    letter-spacing: 0.6px; text-transform: uppercase;
-    box-shadow: 0 0 20px rgba(0,255,136,0.6);
-}}
-.best-reason {{
-    margin-top: 12px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: rgba(0,255,136,0.08);
-    border-left: 3px solid #00ff88;
-    font-size: 13px;
-    line-height: 1.6;
-    color: {txt};
-}}
+    background: linear-gradient(135deg, #00ff88, #00cc6a); color: #05070f;
+    font-size: 11px; font-weight: 900; letter-spacing: 0.6px; text-transform: uppercase;
+    box-shadow: 0 0 20px rgba(0,255,136,0.6); }}
+.best-reason {{ margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(0,255,136,0.08); border-left: 3px solid #00ff88;
+    font-size: 13px; line-height: 1.6; color: {txt}; }}
 .best-reason b {{ color: #00ff88; text-shadow: 0 0 10px rgba(0,255,136,0.6); }}
 .best-reason .hl {{ color: {accent}; font-weight: 800; text-shadow: 0 0 10px rgba(0,245,255,0.5); }}
 
@@ -440,7 +373,6 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
 .badge-defensivo {{ background: linear-gradient(135deg, {accent2}, #7c3aed); color: #fff;
     padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
     box-shadow: 0 0 15px rgba(181,55,255,0.5); }}
-
 .badge-ht-heavy {{ background: linear-gradient(135deg, #ff8c00, #ff2e88); color: #fff;
     padding: 4px 12px; border-radius: 100px; font-size: 10.5px; font-weight: 900;
     box-shadow: 0 0 15px rgba(255,140,0,0.5); }}
@@ -452,8 +384,7 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     box-shadow: 0 0 15px rgba(122,137,168,0.5); }}
 .dual-bar {{ display: flex; height: 8px; border-radius: 100px;
     overflow: hidden; margin-top: 10px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(0,0,0,0.3); }}
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); }}
 .dual-bar .ht {{ background: linear-gradient(90deg, #ff8c00, #ff2e88);
     box-shadow: 0 0 10px rgba(255,140,0,0.5); }}
 .dual-bar .ft {{ background: linear-gradient(90deg, #00f5ff, #b537ff);
@@ -478,35 +409,19 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     box-shadow: 0 0 15px rgba(0,245,255,0.1);
     padding: 10px 12px;
 }}
-.rank-hcell {{
-    font-size: 10px; font-weight: 900; color: #00f5ff;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    text-align: center;
-    text-shadow: 0 0 8px rgba(0,245,255,0.5);
-    white-space: nowrap;
-}}
-.rank-row {{
-    background: rgba(15,20,35,0.85);
-    border: 1px solid rgba(0,245,255,0.15);
-    transition: all 0.15s;
-}}
-.rank-row:hover {{
-    border-color: rgba(0,245,255,0.5);
-    box-shadow: 0 0 18px rgba(0,245,255,0.15);
-    background: rgba(20,28,50,0.9);
-}}
+.rank-hcell {{ font-size: 10px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+    text-shadow: 0 0 8px rgba(0,245,255,0.5); white-space: nowrap; }}
+.rank-row {{ background: rgba(15,20,35,0.85);
+    border: 1px solid rgba(0,245,255,0.15); transition: all 0.15s; }}
+.rank-row:hover {{ border-color: rgba(0,245,255,0.5);
+    box-shadow: 0 0 18px rgba(0,245,255,0.15); background: rgba(20,28,50,0.9); }}
 .rank-pos {{ font-size: 15px; font-weight: 900; text-align: center; }}
-.rank-name {{
-    font-size: 13px; font-weight: 900; color: #f0f5ff;
+.rank-name {{ font-size: 13px; font-weight: 900; color: #f0f5ff;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-shadow: 0 0 8px rgba(0,245,255,0.3);
-}}
-.rank-num {{
-    font-size: 12.5px; font-weight: 800;
-    font-family: 'JetBrains Mono', monospace;
-    text-align: center;
-    color: #f0f5ff;
-}}
+    text-shadow: 0 0 8px rgba(0,245,255,0.3); }}
+.rank-num {{ font-size: 12.5px; font-weight: 800;
+    font-family: 'JetBrains Mono', monospace; text-align: center; color: #f0f5ff; }}
 .rank-form {{ display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; }}
 
 .lp-market-card {{
@@ -516,36 +431,22 @@ details[open] > summary svg {{ color: {accent} !important; fill: {accent} !impor
     box-shadow: 0 0 24px rgba(0,245,255,0.08), inset 0 0 20px rgba(0,245,255,0.03);
     transition: all 0.25s ease; overflow: hidden; margin-bottom: 10px;
 }}
-.lp-market-card:hover {{
-    border-color: rgba(0,245,255,0.6);
-    box-shadow: 0 0 36px rgba(0,245,255,0.2), inset 0 0 25px rgba(0,245,255,0.08);
-    transform: translateY(-2px);
-}}
-.lp-market-card .lp-title {{
-    font-size: 13px; font-weight: 900; color: #f0f5ff;
+.lp-market-card .lp-title {{ font-size: 13px; font-weight: 900; color: #f0f5ff;
     text-transform: uppercase; letter-spacing: 1px;
-    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-}}
-.lp-market-card .lp-row {{
-    display: flex; justify-content: space-between;
-    font-size: 12.5px; padding: 4px 0; color: #7a89a8;
-}}
-.lp-market-card .lp-row b {{
-    color: #f0f5ff; font-family: 'JetBrains Mono', monospace; font-weight: 800;
-}}
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }}
+.lp-market-card .lp-row {{ display: flex; justify-content: space-between;
+    font-size: 12.5px; padding: 4px 0; color: #7a89a8; }}
+.lp-market-card .lp-row b {{ color: #f0f5ff;
+    font-family: 'JetBrains Mono', monospace; font-weight: 800; }}
 
 #MainMenu, footer {{ visibility: hidden; }}
 header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 
-/* ═══════════════════════════════════════════════════════════
-   LAYOUT V2 — HERO / NAV / INFO CARDS / MATCH ROWS / FOOTER
-   ═══════════════════════════════════════════════════════════ */
 .hero-v2 {{
     display: flex; justify-content: space-between; align-items: center;
     padding: 20px 28px; margin-bottom: 16px;
     background: linear-gradient(135deg, rgba(5,8,20,0.98) 0%, rgba(10,15,30,0.98) 100%);
-    border: 1.5px solid rgba(0,245,255,0.4);
-    border-radius: 14px;
+    border: 1.5px solid rgba(0,245,255,0.4); border-radius: 14px;
     box-shadow: 0 0 50px rgba(0,245,255,0.15), inset 0 0 50px rgba(0,245,255,0.03);
     position: relative; overflow: hidden;
 }}
@@ -572,93 +473,64 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 }}
 .hero-v2-title-block {{ display: flex; flex-direction: column; gap: 8px; }}
 .hero-v2-title {{
-    font-size: 36px; font-weight: 900;
-    letter-spacing: -0.8px; color: #f0f5ff;
+    font-size: 36px; font-weight: 900; letter-spacing: -0.8px; color: #f0f5ff;
     text-shadow: 0 0 35px rgba(0,245,255,0.5);
     line-height: 1; font-style: italic;
     display: flex; align-items: center; gap: 12px;
 }}
-.hero-v2-title .bolt {{
-    color: #00f5ff; filter: drop-shadow(0 0 15px #00f5ff); font-style: normal;
-}}
+.hero-v2-title .bolt {{ color: #00f5ff; filter: drop-shadow(0 0 15px #00f5ff); font-style: normal; }}
 .hero-v2-accent {{
     background: linear-gradient(135deg, #00f5ff 0%, #b537ff 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 22px rgba(181,55,255,0.8));
 }}
-.hero-v2-tagline {{
-    display: flex; align-items: center; gap: 12px;
-    font-size: 11.5px; font-weight: 700;
-}}
-.hero-v2-at {{
-    color: #00f5ff; font-weight: 900; font-size: 13px;
-    text-shadow: 0 0 14px rgba(0,245,255,0.9);
-}}
+.hero-v2-tagline {{ display: flex; align-items: center; gap: 12px;
+    font-size: 11.5px; font-weight: 700; }}
+.hero-v2-at {{ color: #00f5ff; font-weight: 900; font-size: 13px;
+    text-shadow: 0 0 14px rgba(0,245,255,0.9); }}
 .hero-v2-tag-sep {{ color: #3a4a6a; font-size: 14px; }}
 .hero-v2-tag-text {{ color: #7a89a8; letter-spacing: 1.2px; }}
 .hero-v2-right {{ display: flex; align-items: center; gap: 22px; }}
 .hero-v2-right-text {{ text-align: right; }}
-.hero-v2-rl1 {{
-    font-size: 13.5px; font-weight: 800;
+.hero-v2-rl1 {{ font-size: 13.5px; font-weight: 800;
     color: #f0f5ff; letter-spacing: 2px;
-    text-shadow: 0 0 12px rgba(0,245,255,0.3);
-}}
-.hero-v2-rl2 {{
-    font-size: 17px; font-weight: 900;
-    letter-spacing: 2px; color: #f0f5ff; margin-top: 2px;
-}}
+    text-shadow: 0 0 12px rgba(0,245,255,0.3); }}
+.hero-v2-rl2 {{ font-size: 17px; font-weight: 900;
+    letter-spacing: 2px; color: #f0f5ff; margin-top: 2px; }}
 .hero-v2-hl {{
     background: linear-gradient(135deg, #00f5ff, #b537ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 18px rgba(0,245,255,0.8));
 }}
 .hero-v2-badge {{
-    width: 78px; height: 78px;
-    border-radius: 20px;
+    width: 78px; height: 78px; border-radius: 20px;
     background: linear-gradient(135deg, rgba(8,12,25,0.98), rgba(15,20,40,0.98));
     border: 2px solid rgba(0,245,255,0.55);
     display: flex; align-items: center; justify-content: center;
     position: relative;
     box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08);
     animation: badgePulse 3s ease-in-out infinite;
-    overflow: hidden;
-    flex-shrink: 0;
+    overflow: hidden; flex-shrink: 0;
 }}
 .hero-v2-badge::before {{
-    content: '';
-    position: absolute;
-    inset: -50%;
+    content: ''; position: absolute; inset: -50%;
     background: conic-gradient(from 0deg, transparent, #00f5ff, transparent, #b537ff, transparent);
-    animation: badgeRotate 4s linear infinite;
-    opacity: 0.45;
-    z-index: 0;
+    animation: badgeRotate 4s linear infinite; opacity: 0.45; z-index: 0;
 }}
 .hero-v2-badge::after {{
-    content: '';
-    position: absolute;
-    inset: 2px;
-    border-radius: 16px;
+    content: ''; position: absolute; inset: 2px; border-radius: 16px;
     background: linear-gradient(135deg, rgba(8,12,25,0.99), rgba(15,20,40,0.99));
     z-index: 1;
 }}
-.hero-v2-badge svg {{
-    position: relative;
-    z-index: 2;
-    width: 44px; height: 44px;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.9));
-}}
 .hero-v2-badge .badge-emoji {{
-    position: relative; z-index: 2;
-    font-size: 40px;
+    position: relative; z-index: 2; font-size: 40px;
     filter: drop-shadow(0 0 14px rgba(0,245,255,0.9));
 }}
 @keyframes badgePulse {{
     0%,100% {{ box-shadow: 0 0 30px rgba(0,245,255,0.45), inset 0 0 25px rgba(0,245,255,0.08); }}
     50%     {{ box-shadow: 0 0 48px rgba(181,55,255,0.75), inset 0 0 30px rgba(181,55,255,0.18); }}
 }}
-@keyframes badgeRotate {{
-    to {{ transform: rotate(360deg); }}
-}}
+@keyframes badgeRotate {{ to {{ transform: rotate(360deg); }} }}
 
 .info-v2-row {{
     display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -668,8 +540,7 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
     display: flex; align-items: center; gap: 14px;
     padding: 14px 20px;
     background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(15,20,40,0.92) 100%);
-    border: 1.5px solid rgba(0,245,255,0.35);
-    border-radius: 12px;
+    border: 1.5px solid rgba(0,245,255,0.35); border-radius: 12px;
     box-shadow: 0 0 28px rgba(0,245,255,0.1), inset 0 0 22px rgba(0,245,255,0.03);
     position: relative; overflow: hidden;
 }}
@@ -688,55 +559,36 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
     filter: drop-shadow(0 0 12px rgba(0,245,255,0.6));
 }}
 .info-v2-content {{ display: flex; flex-direction: column; gap: 2px; min-width: 0; }}
-.info-v2-label {{
-    font-size: 9.5px; font-weight: 900; color: #7a89a8;
-    text-transform: uppercase; letter-spacing: 1.6px;
-}}
-.info-v2-value {{
-    font-size: 26px; font-weight: 900;
+.info-v2-label {{ font-size: 9.5px; font-weight: 900; color: #7a89a8;
+    text-transform: uppercase; letter-spacing: 1.6px; }}
+.info-v2-value {{ font-size: 26px; font-weight: 900;
     background: linear-gradient(135deg, #ffffff, #00f5ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     font-family: 'JetBrains Mono', monospace;
     line-height: 1; letter-spacing: -0.5px;
-    filter: drop-shadow(0 0 14px rgba(0,245,255,0.7));
-}}
+    filter: drop-shadow(0 0 14px rgba(0,245,255,0.7)); }}
 .info-v2-value.purple {{
     background: linear-gradient(135deg, #ffffff, #b537ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 14px rgba(181,55,255,0.7));
-}}
-.info-v2-sub {{
-    font-size: 10px; font-weight: 800; color: #7a89a8;
-    letter-spacing: 1px; margin-top: 2px;
-}}
-.info-v2-prob-text {{
-    font-size: 13px; font-weight: 800; color: #00f5ff;
+    filter: drop-shadow(0 0 14px rgba(181,55,255,0.7)); }}
+.info-v2-sub {{ font-size: 10px; font-weight: 800; color: #7a89a8;
+    letter-spacing: 1px; margin-top: 2px; }}
+.info-v2-prob-text {{ font-size: 13px; font-weight: 800; color: #00f5ff;
     font-family: 'JetBrains Mono', monospace;
-    text-shadow: 0 0 12px rgba(0,245,255,0.6);
-    letter-spacing: 0.3px;
-}}
-.info-v2-online {{
-    margin-left: auto;
+    text-shadow: 0 0 12px rgba(0,245,255,0.6); letter-spacing: 0.3px; }}
+.info-v2-online {{ margin-left: auto;
     display: inline-flex; align-items: center; gap: 7px;
-    padding: 6px 14px;
-    background: rgba(0,255,136,0.1);
-    border: 1px solid rgba(0,255,136,0.45);
-    border-radius: 100px;
-    font-size: 10px; font-weight: 900;
-    color: #00ff88; letter-spacing: 1.2px;
-    text-shadow: 0 0 12px rgba(0,255,136,0.7);
-}}
-.info-v2-dot {{
-    width: 7px; height: 7px; border-radius: 50%;
-    background: #00ff88; box-shadow: 0 0 12px #00ff88;
-    animation: pulse 2s infinite;
-}}
+    padding: 6px 14px; background: rgba(0,255,136,0.1);
+    border: 1px solid rgba(0,255,136,0.45); border-radius: 100px;
+    font-size: 10px; font-weight: 900; color: #00ff88; letter-spacing: 1.2px;
+    text-shadow: 0 0 12px rgba(0,255,136,0.7); }}
+.info-v2-dot {{ width: 7px; height: 7px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 12px #00ff88; animation: pulse 2s infinite; }}
 @keyframes pulse {{
     0%,100% {{ opacity: 1; transform: scale(1); }}
     50%     {{ opacity: 0.5; transform: scale(1.2); }}
 }}
 
-/* ═══ MATCH ROWS — LAYOUT COMPACTO V2.2 ═══ */
 .match-v2-header, .match-v2-row {{
     display: grid;
     grid-template-columns: 135px 320px 115px 130px 130px minmax(400px, 1fr);
@@ -749,148 +601,88 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
     border-radius: 10px; margin-bottom: 5px;
     box-shadow: 0 0 24px rgba(0,245,255,0.14);
 }}
-.mvh-cell {{
-    font-size: 10px; font-weight: 900; color: #00f5ff;
-    text-transform: uppercase; letter-spacing: 0.9px;
-    text-align: center;
+.mvh-cell {{ font-size: 10px; font-weight: 900; color: #00f5ff;
+    text-transform: uppercase; letter-spacing: 0.9px; text-align: center;
     display: flex; align-items: center; justify-content: center;
-    text-shadow: 0 0 12px rgba(0,245,255,0.7);
-}}
+    text-shadow: 0 0 12px rgba(0,245,255,0.7); }}
 .match-v2-row {{
     padding: 7px 10px;
     background: linear-gradient(135deg, rgba(8,12,25,0.92) 0%, rgba(12,18,35,0.88) 100%);
-    border: 1.5px solid rgba(0,245,255,0.22);
-    border-radius: 10px; margin-bottom: 5px;
+    border: 1.5px solid rgba(0,245,255,0.22); border-radius: 10px; margin-bottom: 5px;
     transition: all 0.2s; align-items: stretch;
 }}
 .match-v2-row:hover {{
     border-color: rgba(0,245,255,0.65);
-    box-shadow: 0 0 32px rgba(0,245,255,0.22);
-    transform: translateY(-1px);
+    box-shadow: 0 0 32px rgba(0,245,255,0.22); transform: translateY(-1px);
 }}
-.mv-box {{
-    display: flex; flex-direction: column; justify-content: center;
+.mv-box {{ display: flex; flex-direction: column; justify-content: center;
     padding: 6px 9px; border-radius: 8px;
-    background: rgba(0,245,255,0.03);
-    border: 1px solid rgba(0,245,255,0.15);
-    min-height: 54px; overflow: hidden;
-}}
+    background: rgba(0,245,255,0.03); border: 1px solid rgba(0,245,255,0.15);
+    min-height: 54px; overflow: hidden; }}
 .mv-time {{ align-items: center; text-align: center; }}
-.mv-time-val {{
-    font-size: 17px; font-weight: 900; color: #f0f5ff;
+.mv-time-val {{ font-size: 17px; font-weight: 900; color: #f0f5ff;
     font-family: 'JetBrains Mono', monospace;
     text-shadow: 0 0 16px rgba(0,245,255,0.55);
-    line-height: 1; letter-spacing: -0.5px;
-}}
-.mv-league-tag {{
-    font-size: 8.5px; font-weight: 900; color: #00f5ff;
+    line-height: 1; letter-spacing: -0.5px; }}
+.mv-league-tag {{ font-size: 8.5px; font-weight: 900; color: #00f5ff;
     text-transform: uppercase; letter-spacing: 0.4px;
-    background: rgba(0,245,255,0.1);
-    border: 1px solid rgba(0,245,255,0.35);
+    background: rgba(0,245,255,0.1); border: 1px solid rgba(0,245,255,0.35);
     padding: 2px 8px; border-radius: 100px; margin-top: 4px;
     white-space: nowrap; text-shadow: 0 0 10px rgba(0,245,255,0.7);
-    display: inline-block;
-}}
-.mv-teams {{
-    flex-direction: row !important;
+    display: inline-block; }}
+.mv-teams {{ flex-direction: row !important;
     align-items: center; justify-content: space-between;
-    gap: 6px; padding: 6px 14px;
-}}
+    gap: 6px; padding: 6px 14px; }}
 .mv-team {{ display: flex; align-items: center; gap: 9px; min-width: 0; }}
-.mv-crest {{
-    width: 30px; height: 30px; border-radius: 50%;
+.mv-crest {{ width: 30px; height: 30px; border-radius: 50%;
     background: linear-gradient(135deg, #1a2540, #0f1424);
     border: 1.5px solid rgba(0,245,255,0.45);
     display: flex; align-items: center; justify-content: center;
     font-size: 10px; font-weight: 900; color: #00f5ff;
     box-shadow: 0 0 14px rgba(0,245,255,0.35);
-    flex-shrink: 0; text-shadow: 0 0 10px rgba(0,245,255,0.9);
-}}
-.mv-crest.away {{
-    color: #b537ff; border-color: rgba(181,55,255,0.45);
-    box-shadow: 0 0 14px rgba(181,55,255,0.35);
-}}
-.mv-team-name {{
-    font-size: 14px; font-weight: 900; color: #f0f5ff;
+    flex-shrink: 0; text-shadow: 0 0 10px rgba(0,245,255,0.9); }}
+.mv-crest.away {{ color: #b537ff; border-color: rgba(181,55,255,0.45);
+    box-shadow: 0 0 14px rgba(181,55,255,0.35); }}
+.mv-team-name {{ font-size: 14px; font-weight: 900; color: #f0f5ff;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    letter-spacing: 0.3px;
-}}
+    letter-spacing: 0.3px; }}
 .mv-team.left .mv-team-name {{
     background: linear-gradient(135deg, #ffffff, #00f5ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 8px rgba(0,245,255,0.5));
-}}
+    filter: drop-shadow(0 0 8px rgba(0,245,255,0.5)); }}
 .mv-team.right .mv-team-name {{
     background: linear-gradient(135deg, #ffffff, #b537ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 8px rgba(181,55,255,0.5));
-}}
-.mv-vs {{
-    font-size: 9px; font-weight: 900; color: #3a4a6a;
-    padding: 3px 8px;
-    background: rgba(255,255,255,0.03);
+    filter: drop-shadow(0 0 8px rgba(181,55,255,0.5)); }}
+.mv-vs {{ font-size: 9px; font-weight: 900; color: #3a4a6a;
+    padding: 3px 8px; background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 100px; flex-shrink: 0;
-}}
+    border-radius: 100px; flex-shrink: 0; }}
 .mv-media {{ align-items: center; justify-content: center; text-align: center; }}
-.mv-media-vals {{
-    display: flex; flex-direction: column; gap: 2px;
+.mv-media-vals {{ display: flex; flex-direction: column; gap: 2px;
     font-family: 'JetBrains Mono', monospace;
-    align-items: center; justify-content: center;
-}}
-.mv-media-vals .ht,
-.mv-media-vals .ft {{
-    font-size: 14px; font-weight: 900;
-    line-height: 1.15; letter-spacing: -0.3px;
-}}
-.mv-media-vals .ht {{
-    color: #b537ff;
-    text-shadow: 0 0 12px rgba(181,55,255,0.6);
-}}
-.mv-media-vals .ft {{
-    color: #00f5ff;
-    text-shadow: 0 0 14px rgba(0,245,255,0.6);
-}}
-.mv-bet {{
-    align-items: center; justify-content: center;
+    align-items: center; justify-content: center; }}
+.mv-media-vals .ht, .mv-media-vals .ft {{
+    font-size: 14px; font-weight: 900; line-height: 1.15; letter-spacing: -0.3px; }}
+.mv-media-vals .ht {{ color: #b537ff; text-shadow: 0 0 12px rgba(181,55,255,0.6); }}
+.mv-media-vals .ft {{ color: #00f5ff; text-shadow: 0 0 14px rgba(0,245,255,0.6); }}
+.mv-bet {{ align-items: center; justify-content: center;
     text-align: center; cursor: pointer; transition: all 0.2s;
-    padding: 6px 8px !important;
-}}
-.mv-bet.green {{
-    background: linear-gradient(135deg, rgba(0,255,136,0.16), rgba(0,255,136,0.05));
-    border-color: rgba(0,255,136,0.55);
-    box-shadow: 0 0 18px rgba(0,255,136,0.22);
-}}
-.mv-bet.red {{
-    background: linear-gradient(135deg, rgba(255,46,136,0.16), rgba(255,46,136,0.05));
-    border-color: rgba(255,46,136,0.55);
-    box-shadow: 0 0 18px rgba(255,46,136,0.22);
-}}
-.mv-bet.cyan {{
-    background: linear-gradient(135deg, rgba(0,245,255,0.16), rgba(0,245,255,0.05));
-    border-color: rgba(0,245,255,0.55);
-    box-shadow: 0 0 18px rgba(0,245,255,0.22);
-}}
-.mv-bet.yellow {{
-    background: linear-gradient(135deg, rgba(255,214,0,0.16), rgba(255,214,0,0.05));
-    border-color: rgba(255,214,0,0.55);
-    box-shadow: 0 0 18px rgba(255,214,0,0.22);
-}}
-.mv-bet-lbl {{ display: none !important; }}
-.mv-bet-val {{
-    font-size: 18px; font-weight: 900;
-    letter-spacing: 0.3px; line-height: 1.15;
-    text-align: center;
-}}
-.mv-bet-line {{
-    font-size: 11.5px; font-weight: 900;
+    padding: 6px 8px !important; }}
+.mv-bet.green {{ background: linear-gradient(135deg, rgba(0,255,136,0.16), rgba(0,255,136,0.05));
+    border-color: rgba(0,255,136,0.55); box-shadow: 0 0 18px rgba(0,255,136,0.22); }}
+.mv-bet.red {{ background: linear-gradient(135deg, rgba(255,46,136,0.16), rgba(255,46,136,0.05));
+    border-color: rgba(255,46,136,0.55); box-shadow: 0 0 18px rgba(255,46,136,0.22); }}
+.mv-bet.cyan {{ background: linear-gradient(135deg, rgba(0,245,255,0.16), rgba(0,245,255,0.05));
+    border-color: rgba(0,245,255,0.55); box-shadow: 0 0 18px rgba(0,245,255,0.22); }}
+.mv-bet.yellow {{ background: linear-gradient(135deg, rgba(255,214,0,0.16), rgba(255,214,0,0.05));
+    border-color: rgba(255,214,0,0.55); box-shadow: 0 0 18px rgba(255,214,0,0.22); }}
+.mv-bet-val {{ font-size: 18px; font-weight: 900;
+    letter-spacing: 0.3px; line-height: 1.15; text-align: center; }}
+.mv-bet-line {{ font-size: 11.5px; font-weight: 900;
     text-transform: uppercase; letter-spacing: 0.5px;
-    margin-top: 4px; opacity: 0.95;
-    white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    text-align: center;
-}}
+    margin-top: 4px; opacity: 0.95; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 100%; text-align: center; }}
 .mv-bet.green .mv-bet-val {{ color: #00ff88; text-shadow: 0 0 16px rgba(0,255,136,0.8); }}
 .mv-bet.red   .mv-bet-val {{ color: #ff2e88; text-shadow: 0 0 16px rgba(255,46,136,0.8); }}
 .mv-bet.cyan  .mv-bet-val {{ color: #00f5ff; text-shadow: 0 0 16px rgba(0,245,255,0.8); }}
@@ -900,176 +692,89 @@ header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
 .mv-bet.cyan  .mv-bet-line {{ color: #00f5ff; text-shadow: 0 0 10px rgba(0,245,255,0.7); }}
 .mv-bet.yellow .mv-bet-line {{ color: #ffd600; text-shadow: 0 0 10px rgba(255,214,0,0.7); }}
 
-/* ═══ OVER INDIVIDUAL — COM GOLS ESPERADOS EM DESTAQUE ═══ */
 .mv-over {{ padding: 8px 14px; }}
-.mv-over-hdr {{
-    font-size: 10px; font-weight: 900; color: #00f5ff;
+.mv-over-hdr {{ font-size: 10px; font-weight: 900; color: #00f5ff;
     text-transform: uppercase; letter-spacing: 1px;
     text-align: center; padding-bottom: 4px;
     border-bottom: 1px solid rgba(0,245,255,0.22);
-    margin-bottom: 8px;
-    text-shadow: 0 0 12px rgba(0,245,255,0.7);
-}}
-.mv-over-cols {{
-    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-    max-width: 540px;
-    margin: 0 auto;
-}}
-.mv-over-team {{
-    display: flex; flex-direction: column; gap: 6px;
-    min-width: 0;
-}}
-.mv-over-pname {{
-    font-size: 15px; font-weight: 900;
+    margin-bottom: 8px; text-shadow: 0 0 12px rgba(0,245,255,0.7); }}
+.mv-over-cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+    max-width: 540px; margin: 0 auto; }}
+.mv-over-team {{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }}
+.mv-over-pname {{ font-size: 15px; font-weight: 900;
     text-align: center; letter-spacing: 0.4px;
-    white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis;
-    padding-bottom: 6px;
-    border-bottom: 1px dashed rgba(0,245,255,0.2);
-    text-shadow: 0 0 14px currentColor;
-}}
-.mv-over-exp {{
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 4px;
-    margin: 2px 0 6px 0;
-    padding: 10px 12px 8px 12px;
-    border-radius: 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding-bottom: 6px; border-bottom: 1px dashed rgba(0,245,255,0.2);
+    text-shadow: 0 0 14px currentColor; }}
+.mv-over-exp {{ display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px;
+    margin: 2px 0 6px 0; padding: 10px 12px 8px 12px; border-radius: 10px;
     background: linear-gradient(135deg, rgba(0,245,255,0.12), rgba(181,55,255,0.08));
     border: 1.5px solid rgba(0,245,255,0.5);
     box-shadow: 0 0 20px rgba(0,245,255,0.28), inset 0 0 15px rgba(0,245,255,0.05);
-    position: relative;
-    overflow: hidden;
-}}
-.mv-over-exp::before {{
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    position: relative; overflow: hidden; }}
+.mv-over-exp::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
     background: linear-gradient(90deg, transparent, #00f5ff, #b537ff, #00f5ff, transparent);
-    opacity: 0.85;
-}}
-.mv-over-exp-lbl {{
-    font-size: 8.5px; color: #00f5ff;
-    font-weight: 900; text-transform: uppercase;
-    letter-spacing: 1.4px;
-    text-shadow: 0 0 10px rgba(0,245,255,0.7);
-    text-align: center;
-}}
-.mv-over-exp-main {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 30px; font-weight: 900;
-    line-height: 1;
-    letter-spacing: -1.5px;
-    text-shadow: 0 0 22px currentColor;
-    text-align: center;
-    margin: 1px 0;
-}}
-.mv-over-exp-samples {{
-    display: flex; align-items: center; justify-content: center;
-    gap: 8px;
-    width: 100%;
-    margin-top: 3px;
-    padding-top: 6px;
-    border-top: 1px dashed rgba(0,245,255,0.2);
-}}
-.mv-over-exp-group {{
-    display: flex; align-items: center; gap: 4px;
-    flex-shrink: 0;
-}}
-.mv-over-exp-smp {{
-    font-size: 8.5px; font-weight: 900;
-    letter-spacing: 0.4px;
-    padding: 1px 6px;
-    border-radius: 100px;
-    flex-shrink: 0;
-    white-space: nowrap;
-    text-transform: uppercase;
-}}
-.mv-over-exp-smp.high {{
-    color: #00ff88;
-    background: rgba(0,255,136,0.15);
-    border: 1px solid rgba(0,255,136,0.45);
-    text-shadow: 0 0 6px rgba(0,255,136,0.7);
-}}
-.mv-over-exp-smp.medium {{
-    color: #ffd600;
-    background: rgba(255,214,0,0.15);
-    border: 1px solid rgba(255,214,0,0.45);
-    text-shadow: 0 0 6px rgba(255,214,0,0.7);
-}}
-.mv-over-exp-smp.low {{
-    color: #ff2e88;
-    background: rgba(255,46,136,0.15);
-    border: 1px solid rgba(255,46,136,0.45);
-    text-shadow: 0 0 6px rgba(255,46,136,0.7);
-}}
-.mv-over-exp-smp.none {{
-    color: #7a89a8;
-    background: rgba(122,137,168,0.12);
-    border: 1px solid rgba(122,137,168,0.3);
-}}
-.mv-over-exp-val-mini {{
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 900; font-size: 11.5px;
-    letter-spacing: -0.3px;
-    text-shadow: 0 0 8px currentColor;
-}}
-.mv-over-exp-sep {{
-    color: rgba(0,245,255,0.35);
-    font-weight: 900;
-    font-size: 12px;
-    flex-shrink: 0;
-}}
-.mv-over-exp-trend {{
-    font-size: 13px;
-    flex-shrink: 0;
-    filter: drop-shadow(0 0 6px currentColor);
-}}
-.mv-over-stat {{
-    display: flex; justify-content: space-between;
-    align-items: center; gap: 10px;
-    font-size: 12px; line-height: 1.5;
-    padding: 2px 0;
-}}
-.mv-over-lbl {{
-    font-size: 11px; color: #8b9bb8;
+    opacity: 0.85; }}
+.mv-over-exp-lbl {{ font-size: 8.5px; color: #00f5ff;
+    font-weight: 900; text-transform: uppercase; letter-spacing: 1.4px;
+    text-shadow: 0 0 10px rgba(0,245,255,0.7); text-align: center; }}
+.mv-over-exp-main {{ font-family: 'JetBrains Mono', monospace;
+    font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -1.5px;
+    text-shadow: 0 0 22px currentColor; text-align: center; margin: 1px 0; }}
+.mv-over-exp-samples {{ display: flex; align-items: center; justify-content: center;
+    gap: 8px; width: 100%; margin-top: 3px; padding-top: 6px;
+    border-top: 1px dashed rgba(0,245,255,0.2); }}
+.mv-over-exp-group {{ display: flex; align-items: center; gap: 4px; flex-shrink: 0; }}
+.mv-over-exp-smp {{ font-size: 8.5px; font-weight: 900;
+    letter-spacing: 0.4px; padding: 1px 6px; border-radius: 100px;
+    flex-shrink: 0; white-space: nowrap; text-transform: uppercase; }}
+.mv-over-exp-smp.high {{ color: #00ff88; background: rgba(0,255,136,0.15);
+    border: 1px solid rgba(0,255,136,0.45); text-shadow: 0 0 6px rgba(0,255,136,0.7); }}
+.mv-over-exp-smp.medium {{ color: #ffd600; background: rgba(255,214,0,0.15);
+    border: 1px solid rgba(255,214,0,0.45); text-shadow: 0 0 6px rgba(255,214,0,0.7); }}
+.mv-over-exp-smp.low {{ color: #ff2e88; background: rgba(255,46,136,0.15);
+    border: 1px solid rgba(255,46,136,0.45); text-shadow: 0 0 6px rgba(255,46,136,0.7); }}
+.mv-over-exp-smp.none {{ color: #7a89a8; background: rgba(122,137,168,0.12);
+    border: 1px solid rgba(122,137,168,0.3); }}
+.mv-over-exp-val-mini {{ font-family: 'JetBrains Mono', monospace;
+    font-weight: 900; font-size: 11.5px; letter-spacing: -0.3px;
+    text-shadow: 0 0 8px currentColor; }}
+.mv-over-exp-sep {{ color: rgba(0,245,255,0.35); font-weight: 900;
+    font-size: 12px; flex-shrink: 0; }}
+.mv-over-exp-trend {{ font-size: 13px; flex-shrink: 0;
+    filter: drop-shadow(0 0 6px currentColor); }}
+.mv-over-stat {{ display: flex; justify-content: space-between;
+    align-items: center; gap: 10px; font-size: 12px; line-height: 1.5;
+    padding: 2px 0; }}
+.mv-over-lbl {{ font-size: 11px; color: #8b9bb8;
     font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
-}}
-.mv-over-pct {{
-    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.4px; white-space: nowrap; }}
+.mv-over-pct {{ font-family: 'JetBrains Mono', monospace;
     font-weight: 900; font-size: 15px;
-    text-shadow: 0 0 10px currentColor;
-    flex-shrink: 0;
-}}
+    text-shadow: 0 0 10px currentColor; flex-shrink: 0; }}
 
 .footer-v2 {{
     display: flex; justify-content: space-between; align-items: center;
     padding: 14px 22px; margin-top: 22px;
     background: linear-gradient(135deg, rgba(5,8,20,0.92), rgba(10,15,30,0.92));
-    border-top: 1.5px solid rgba(0,245,255,0.35);
-    border-radius: 10px;
+    border-top: 1.5px solid rgba(0,245,255,0.35); border-radius: 10px;
     box-shadow: 0 -10px 40px rgba(0,245,255,0.08);
 }}
-.footer-v2-left {{
-    display: flex; align-items: center; gap: 10px;
+.footer-v2-left {{ display: flex; align-items: center; gap: 10px;
     font-size: 13px; font-weight: 900; color: #f0f5ff;
-    letter-spacing: 1.2px; text-transform: uppercase;
-}}
+    letter-spacing: 1.2px; text-transform: uppercase; }}
 .footer-v2-accent {{
     background: linear-gradient(135deg, #00f5ff, #b537ff);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 12px rgba(0,245,255,0.7));
-}}
-.footer-v2-right {{
-    display: flex; align-items: center; gap: 14px;
+    filter: drop-shadow(0 0 12px rgba(0,245,255,0.7)); }}
+.footer-v2-right {{ display: flex; align-items: center; gap: 14px;
     font-size: 10.5px; font-weight: 800; color: #7a89a8;
-    letter-spacing: 1.8px; text-transform: uppercase;
-}}
+    letter-spacing: 1.8px; text-transform: uppercase; }}
 .footer-v2-right .dot-sep {{ color: #00f5ff; font-size: 14px; }}
 
 .nav-v2 {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }}
 .nav-v2-6 {{ grid-template-columns: repeat(6, 1fr); }}
-
 .pill-actions {{ margin-bottom: 14px; margin-top: 0; }}
 </style>"""
     return base
@@ -1622,11 +1327,6 @@ def generate_tips_pdf(df_f, ad, ld):
     C_BG_ALT = rl_colors.HexColor('#0d1224')
     C_BORDER = rl_colors.HexColor('#1a2540')
     C_CYAN = rl_colors.HexColor('#00f5ff')
-    C_PURPLE = rl_colors.HexColor('#b537ff')
-    C_GREEN = rl_colors.HexColor('#00ff88')
-    C_RED = rl_colors.HexColor('#ff2e88')
-    C_YELLOW = rl_colors.HexColor('#ffd600')
-    C_ORANGE = rl_colors.HexColor('#ff8c00')
     C_DIM = rl_colors.HexColor('#7a89a8')
     C_WHITE = rl_colors.HexColor('#f0f5ff')
 
@@ -1865,16 +1565,6 @@ def monte_carlo(df, ad, ld, ns=N_SIMULATIONS, seed=42):
 # ============================================
 @st.cache_data(ttl=300, show_spinner=False, max_entries=8)
 def monte_carlo_cached(df: pd.DataFrame, ad: dict, ns: int = N_SIMULATIONS, seed: int = 42):
-    """
-    Wrapper com cache do Monte Carlo.
-
-    Como funciona:
-    - Streamlit hasheia os inputs (df + ad). Se já rodou com os MESMOS inputs
-      nos últimos 300s, devolve o resultado em memória (sem recalcular).
-    - Se df ou ad mudam (ex: clique em "⚡ ATUALIZAR JOGOS"), o hash muda
-      e o cache é invalidado automaticamente.
-    - TTL de 5 minutos garante que dados de scraping não fiquem muito velhos.
-    """
     return monte_carlo(df, ad, LEAGUES, ns=ns, seed=seed)
 
 
@@ -2868,21 +2558,63 @@ def page_jogos_do_dia():
     df['competicao'] = df['competicao'].apply(normalize_league_name)
     ad = st.session_state.get('all_data', {})
 
-    # 🔍 DEBUG TEMPORÁRIO — remover depois
-    if not ad:
-        st.error(f"🚨 DEBUG: all_data VAZIO! Tipo: {type(ad)}")
+    # ==================================================
+    # 🔍 DEBUG TEMPORÁRIO — V2 com teste da API 24live
+    # ==================================================
+    st.warning(f"🔍 DEBUG: all_data tem {len(ad)} chaves")
+    for k, v in ad.items():
+        st.text(f"  • {k}: {len(v) if v is not None else 'None'} linhas")
+
+    errs = st.session_state.get('_fetch_errors', [])
+    if errs:
+        st.error(f"🚨 DEBUG ERROS ({len(errs)}):")
+        for e in errs: st.text(f"  ❌ {e}")
     else:
-        total_rows = sum(len(v) for v in ad.values() if v is not None and not v.empty)
-        st.warning(f"🔍 DEBUG: all_data tem {len(ad)} chaves · {total_rows} linhas totais")
-        for k, v in ad.items():
-            st.text(f"  • {k}: {len(v) if v is not None else 'None'} linhas")
+        st.info("✅ Nenhum erro registrado no _fetch_errors")
+
+    # 🧪 TESTE DIRETO NA API 24LIVE
+    if st.button("🧪 TESTAR API 24LIVE", key="test_24live_api"):
+        import requests as _req
+        from datetime import datetime as _dt, timedelta as _td
+        test_url = "https://24live.com/api/match-list-data/105"
+        _now = _dt.now()
+        _params = {
+            'lang': 'pt', 'type': 'all', 'subtournamentIds': '179369',
+            'sort': 'alpha', 'short': 0,
+            'from': (_now - _td(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+            'to': (_now + _td(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
+            'defaultSubtournamentLimit': 1000, 'orderBy': 'desc'
+        }
+        try:
+            _r = _req.get(test_url, params=_params, timeout=30, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Referer': 'https://24live.com/pt/',
+                'Accept': 'application/json',
+            })
+            st.success(f"✅ HTTP {_r.status_code} · {len(_r.text)} bytes")
+            st.text(f"Primeiros 500 chars: {_r.text[:500]}")
+            try:
+                _j = _r.json()
+                _tipo = type(_j).__name__
+                _n = len(_j) if isinstance(_j, (list, dict)) else '?'
+                st.info(f"JSON válido! Tipo: {_tipo} · Total itens: {_n}")
+                if isinstance(_j, list) and len(_j) > 0:
+                    st.json(_j[0])
+                elif isinstance(_j, dict):
+                    st.json(_j)
+            except Exception as _je:
+                st.error(f"JSON inválido: {_je}")
+        except Exception as _e:
+            st.error(f"❌ ERRO no request: {type(_e).__name__}: {_e}")
+
+    st.divider()
+    # ==================================================
 
     if ad:
         jc, jf = compute_jc_jf(df, ad, LEAGUES)
         df['JC'], df['JF'] = jc, jf
         with st.spinner("Rodando Monte Carlo..."):
             r = monte_carlo_cached(df, ad)
-        ...
         for c, v in r.items(): df[c] = v
         for c in ['Gols HT', 'Gols FT', 'xG Casa', 'xG Fora']:
             df[c] = pd.to_numeric(df[c], errors='coerce')
@@ -3533,7 +3265,7 @@ with st.sidebar:
         if ok: st.success(f"✅ {msg}")
         else: st.error(f"❌ {msg}")
     st.markdown(f"""<div class="sb-footer">
-        FIFAlgorithm v6.12.0 - Streamlit
+        FIFAlgorithm v6.12.1 - Streamlit
         <div class="sb-footer-user">
             <div class="sb-avatar">V</div>
             <div>
