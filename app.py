@@ -2010,6 +2010,7 @@ def page_jogos_do_dia():
         if st.button("💀 CARREGAR DADOS", key="load_leagues", width='stretch', type="primary"):
             with st.spinner("Carregando dados..."):
                 try:
+                    st.cache_data.clear()  # ← LIMPA CACHE DO MONTE CARLO
                     st.session_state['_fetch_errors'] = []
                     st.session_state['_profile_cache'] = {}
                     ad, dbg = {}, {}
@@ -2040,7 +2041,8 @@ def page_jogos_do_dia():
     with nc2:
         if st.button("⚡ ATUALIZAR JOGOS", key="load_games", width='stretch'):
             with st.spinner("Atualizando jogos..."):
-                jogos = scrape_aceodds(max_retries=ACEODDS_MAX_RETRIES, timeout=ACEODDS_TIMEOUT)
+                st.cache_data.clear()  # ← LIMPA CACHE
+                jogos = scrape_aceodds(...)
                 if jogos:
                     st.session_state['aceodds_games'] = jogos
                     st.session_state['aceodds_last_update'] = datetime.now()
